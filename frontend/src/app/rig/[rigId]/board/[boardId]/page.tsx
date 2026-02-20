@@ -84,13 +84,13 @@ const TemperatureChart = ({ logStream }: { logStream: string[] | undefined }) =>
   useEffect(() => {
     if (!chartInstance.current || !logStream || logStream.length === 0) return;
 
-    const regex = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?thm log handler: \[(.*?)\] ([-+]?\d*\.?\d+) C/g;
+    // 更加宽容的正则：匹配时间戳、传感器名（在方括号内）、数值
+    // 支持格式：[2024-05-20 10:00:00] ... [SENSOR_NAME] 45.5 C
+    const regex = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C/g;
     const sensorDataMap = new Map();
     
-    // 我们需要从所有日志行中解析出温度数据
     logStream.forEach(line => {
       let match;
-      // 重置 regex.lastIndex 因为我们使用全局标志并在循环中调用
       regex.lastIndex = 0;
       while ((match = regex.exec(line)) !== null) {
         const timeStr = match[1];

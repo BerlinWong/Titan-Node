@@ -183,38 +183,38 @@ class Agent:
         if pair.cm55_file:
             path = os.path.join(self.selected_case_dir, pair.cm55_file)
             try:
+                # 增加读取量到 100KB，以获取更长的历史曲线
                 with open(path, "rb") as f:
                     f.seek(0, os.SEEK_END)
                     pos = f.tell()
-                    f.seek(max(0, pos - 10000))
-                    tail = f.read(10000).decode('utf-8', errors='ignore')
+                    chunk_size = 100000
+                    f.seek(max(0, pos - chunk_size))
+                    tail = f.read(chunk_size).decode('utf-8', errors='ignore')
                     
-                    print(f"[{board_id}] CM55 tail长度: {len(tail)}, 头部: {repr(tail[:100])}")
                     # 提取最新心跳时间
                     cm_ts_match = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', tail)
                     if cm_ts_match:
                         status_data["cm55_heartbeat"] = cm_ts_match[-1]
 
-                    # 提取日志流 (最后 200 行用于温度图表)
-                    cm55_lines = tail.splitlines()
-                    status_data["cm55_stream"] = cm55_lines[-200:] if len(cm55_lines) > 200 else cm55_lines
+                    # --- 优化：先通过关键字筛选温度行 ---
+                    all_lines = tail.splitlines()
+                    # 过滤包含 thm log 或 PVTC 的行
+                    temp_lines = [l for l in all_lines if "thm log handler" in l or "PVTC_TS" in l]
+                    # 回传最后 300 条温度数据，确保曲线丰满
+                    status_data["cm55_stream"] = temp_lines[-300:] if len(temp_lines) > 300 else temp_lines
 
-                    # 1. 提取所有 PVTC 标签及其对应的【最后一次】出现的数值
-                    # 匹配格式: [PVTC_TS_SOC_...] 后面跟着温度值
+                    # 1. 提取最新传感器数值供仪表盘展示
                     sensor_data = {}
-                    # 使用 finditer 并更新字典，保证存的是最后出现的那个
                     pvtc_matches = re.finditer(r'\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-.\d]+)\s*C', tail)
                     for match in pvtc_matches:
                         sensor_name, value = match.groups()
                         sensor_data[sensor_name] = float(value)
                     
                     if sensor_data:
-                        # 2. 选取所有 SoC 相关温度中的最低值
                         temps = sensor_data.values()
                         status_data["temp_min"] = min(temps)
                         status_data["temperature"] = status_data["temp_min"]
                         
-                        # 3. 特别寻找 DDR 核心传感器 (TS6)
                         ddr_val = None
                         for name, val in sensor_data.items():
                             if "TS6_DDR" in name:
@@ -225,15 +225,10 @@ class Agent:
                                 if "DDR" in name.upper():
                                     ddr_val = val
                                     break
-                        
                         if ddr_val is not None:
                             status_data["temp_ddr"] = ddr_val
-                    else:
-                        print(f"[{board_id}] CM55 扫描完毕，未发现有效温控标签 ([PVTC_TS_SOC_...])")
             except Exception as e:
-                import traceback
                 print(f"[❌ {board_id}] CM55 解析失败: {e}")
-                traceback.print_exc()
 
         # 2. 解析 Kernel 日志
         if pair.kernel_file:
