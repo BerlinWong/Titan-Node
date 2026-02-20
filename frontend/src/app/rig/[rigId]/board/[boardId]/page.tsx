@@ -12,66 +12,6 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
   useEffect(() => {
     if (chartRef.current) {
       chartInstance.current = echarts.init(chartRef.current, 'dark');
-      const option = {
-        backgroundColor: 'transparent',
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: 'rgba(16, 20, 30, 0.95)',
-          borderWidth: 0,
-          textStyle: { color: '#fff', fontSize: 13 },
-          axisPointer: { type: 'cross', lineStyle: { color: 'rgba(255,255,255,0.2)' } },
-          formatter: function (params: any) {
-            const date = new Date(params[0].value[0]);
-            const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
-                          date.getMinutes().toString().padStart(2, '0') + ':' + 
-                          date.getSeconds().toString().padStart(2, '0');
-            
-            let res = `<div style="color: #888; font-size: 11px; margin-bottom: 6px;">${timeStr}</div>`;
-            params.forEach((item: any) => {
-              res += `<div style="margin-bottom: 2px;">
-                        <span style="color:${item.color}; font-weight:bold;">${item.value[1]}°C</span> 
-                        <span style="font-size:11px; color:#aaa; margin-left:10px;">${item.seriesName}</span>
-                      </div>`;
-            });
-            return res;
-          },
-        },
-        legend: {
-          type: 'scroll',
-          textStyle: { color: '#ccc', fontSize: 11 },
-          top: 0,
-          pageTextStyle: { color: '#fff' }
-        },
-        grid: { left: '3%', right: '4%', bottom: '5%', top: '15%', containLabel: true },
-        xAxis: { 
-          type: 'time', 
-          axisLabel: { color: '#888', fontSize: 10 }, 
-          splitLine: { show: false },
-          axisLine: { lineStyle: { color: '#333' } }
-        },
-        yAxis: { 
-          type: 'value', 
-          axisLabel: { color: '#888', fontSize: 10, formatter: '{value}°' }, 
-          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
-          axisLine: { show: false }
-        },
-        dataZoom: [
-          { type: 'inside', start: 0, end: 100 },
-          {
-            show: true,
-            type: 'slider',
-            bottom: 0,
-            height: 15,
-            backgroundColor: 'rgba(255,255,255,0.02)',
-            fillerColor: 'rgba(16, 185, 129, 0.2)',
-            borderColor: 'transparent',
-            handleSize: '80%',
-            textStyle: { color: '#888' },
-          },
-        ],
-        series: [],
-      };
-      chartInstance.current.setOption(option);
     }
     const handleResize = () => chartInstance.current?.resize();
     window.addEventListener('resize', handleResize);
@@ -85,7 +25,6 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
     if (!chartInstance.current || !dataPoints || dataPoints.length === 0) return;
 
     const sensorDataMap = new Map();
-    
     dataPoints.forEach(pt => {
         if (!pt || !pt.name) return;
         if (!sensorDataMap.has(pt.name)) {
@@ -102,7 +41,6 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
     sensorNames.forEach((name) => {
       const data = sensorDataMap.get(name);
       data.sort((a: any, b: any) => a[0] - b[0]);
-      
       const isDefaultVisible = name.toUpperCase().includes("CPU") || name.toUpperCase().includes("DDR") || name.toUpperCase().includes("MIN");
       
       series.push({
@@ -116,8 +54,67 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
       selected[name] = isDefaultVisible;
     });
 
+    // 完整的状态更新，确保包含 xAxis 和 yAxis，防止 ECharts 内部 cartesian 坐标系初始化失败
     chartInstance.current.setOption({ 
-      legend: { data: sensorNames, selected: selected },
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(16, 20, 30, 0.95)',
+        borderWidth: 0,
+        textStyle: { color: '#fff', fontSize: 13 },
+        axisPointer: { type: 'cross', lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+        formatter: function (params: any) {
+          const date = new Date(params[0].value[0]);
+          const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
+                        date.getMinutes().toString().padStart(2, '0') + ':' + 
+                        date.getSeconds().toString().padStart(2, '0');
+          let res = `<div style="color: #888; font-size: 11px; margin-bottom: 6px;">${timeStr}</div>`;
+          params.forEach((item: any) => {
+            res += `<div style="margin-bottom: 2px;">
+                      <span style="color:${item.color}; font-weight:bold;">${item.value[1]}°C</span> 
+                      <span style="font-size:11px; color:#aaa; margin-left:10px;">${item.seriesName}</span>
+                    </div>`;
+          });
+          return res;
+        },
+      },
+      legend: { 
+        data: sensorNames, 
+        selected: selected,
+        type: 'scroll',
+        textStyle: { color: '#ccc', fontSize: 11 },
+        top: 0,
+        pageTextStyle: { color: '#fff' }
+      },
+      grid: { left: '3%', right: '4%', bottom: '5%', top: '15%', containLabel: true },
+      xAxis: { 
+        type: 'time', 
+        axisLabel: { color: '#888', fontSize: 10 }, 
+        splitLine: { show: false },
+        axisLine: { lineStyle: { color: '#333' } }
+      },
+      yAxis: { 
+        type: 'value', 
+        min: function(value: any) { return Math.floor(value.min - 5); },
+        max: function(value: any) { return Math.ceil(value.max + 5); },
+        axisLabel: { color: '#888', fontSize: 10, formatter: '{value}°' }, 
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        axisLine: { show: false }
+      },
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        {
+          show: true,
+          type: 'slider',
+          bottom: 0,
+          height: 15,
+          backgroundColor: 'rgba(255,255,255,0.02)',
+          fillerColor: 'rgba(16, 185, 129, 0.2)',
+          borderColor: 'transparent',
+          handleSize: '80%',
+          textStyle: { color: '#888' },
+        },
+      ],
       series: series 
     }, { notMerge: true });
   }, [dataPoints]);
