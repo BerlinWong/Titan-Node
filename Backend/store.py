@@ -71,3 +71,11 @@ def get_rig_by_id(rig_id: str):
     if report and report.last_report_at:
         report.seconds_since_report = (datetime.now() - report.last_report_at).total_seconds()
     return report
+
+def delete_rig(rig_id: str):
+    """从存储中删除指定台架"""
+    if rig_id in data_store:
+        del data_store[rig_id]
+        save_to_disk()
+        return True
+    return False

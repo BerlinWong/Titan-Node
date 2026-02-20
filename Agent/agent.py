@@ -175,6 +175,7 @@ class Agent:
             "kernel_heartbeat": None,
             "cm55_heartbeat": None,
             "kernel_stream": [],
+            "cm55_stream": [],
             "errors": []
         }
 
@@ -193,6 +194,10 @@ class Agent:
                     cm_ts_match = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', tail)
                     if cm_ts_match:
                         status_data["cm55_heartbeat"] = cm_ts_match[-1]
+
+                    # 提取日志流 (最后 200 行用于温度图表)
+                    cm55_lines = tail.splitlines()
+                    status_data["cm55_stream"] = cm55_lines[-200:] if len(cm55_lines) > 200 else cm55_lines
 
                     # 1. 提取所有 PVTC 标签及其对应的【最后一次】出现的数值
                     # 匹配格式: [PVTC_TS_SOC_...] 后面跟着温度值

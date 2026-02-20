@@ -1,8 +1,136 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { CONFIG } from '@/config';
+import * as echarts from 'echarts';
+
+const TemperatureChart = ({ logStream }: { logStream: string[] | undefined }) => {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const chartInstance = useRef<echarts.ECharts | null>(null);
+
+  useEffect(() => {
+    if (chartRef.current) {
+      chartInstance.current = echarts.init(chartRef.current, 'dark');
+      const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(16, 20, 30, 0.95)',
+          borderWidth: 0,
+          textStyle: { color: '#fff', fontSize: 13 },
+          axisPointer: { type: 'cross', lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+          formatter: function (params: any) {
+            const date = new Date(params[0].value[0]);
+            const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
+                          date.getMinutes().toString().padStart(2, '0') + ':' + 
+                          date.getSeconds().toString().padStart(2, '0');
+            
+            let res = `<div style="color: #888; font-size: 11px; margin-bottom: 6px;">${timeStr}</div>`;
+            params.forEach((item: any) => {
+              res += `<div style="margin-bottom: 2px;">
+                        <span style="color:${item.color}; font-weight:bold;">${item.value[1]}°C</span> 
+                        <span style="font-size:11px; color:#aaa; margin-left:10px;">${item.seriesName}</span>
+                      </div>`;
+            });
+            return res;
+          },
+        },
+        legend: {
+          type: 'scroll',
+          textStyle: { color: '#ccc', fontSize: 11 },
+          top: 0,
+          pageTextStyle: { color: '#fff' }
+        },
+        grid: { left: '3%', right: '4%', bottom: '5%', top: '15%', containLabel: true },
+        xAxis: { 
+          type: 'time', 
+          axisLabel: { color: '#888', fontSize: 10 }, 
+          splitLine: { show: false },
+          axisLine: { lineStyle: { color: '#333' } }
+        },
+        yAxis: { 
+          type: 'value', 
+          axisLabel: { color: '#888', fontSize: 10, formatter: '{value}°' }, 
+          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+          axisLine: { show: false }
+        },
+        dataZoom: [
+          { type: 'inside', start: 0, end: 100 },
+          {
+            show: true,
+            type: 'slider',
+            bottom: 0,
+            height: 15,
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            fillerColor: 'rgba(16, 185, 129, 0.2)',
+            borderColor: 'transparent',
+            handleSize: '80%',
+            textStyle: { color: '#888' },
+          },
+        ],
+        series: [],
+      };
+      chartInstance.current.setOption(option);
+    }
+    const handleResize = () => chartInstance.current?.resize();
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chartInstance.current?.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chartInstance.current || !logStream || logStream.length === 0) return;
+
+    const regex = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?thm log handler: \[(.*?)\] ([-+]?\d*\.?\d+) C/g;
+    const sensorDataMap = new Map();
+    
+    // 我们需要从所有日志行中解析出温度数据
+    logStream.forEach(line => {
+      let match;
+      // 重置 regex.lastIndex 因为我们使用全局标志并在循环中调用
+      regex.lastIndex = 0;
+      while ((match = regex.exec(line)) !== null) {
+        const timeStr = match[1];
+        const sensorName = match[2];
+        const val = parseFloat(match[3]);
+        if (!sensorDataMap.has(sensorName)) sensorDataMap.set(sensorName, []);
+        const dateObj = new Date(timeStr.replace(/-/g, "/"));
+        sensorDataMap.get(sensorName).push([dateObj.getTime(), val]);
+      }
+    });
+
+    const series: any[] = [];
+    const selected: Record<string, boolean> = {};
+    const sensorNames = Array.from(sensorDataMap.keys());
+    
+    sensorNames.forEach((name) => {
+      const data = sensorDataMap.get(name);
+      data.sort((a: any, b: any) => a[0] - b[0]);
+      
+      const isDefaultVisible = name.toUpperCase().includes("CPU") || name.toUpperCase().includes("DDR") || name.toUpperCase().includes("MIN");
+      
+      series.push({
+        name: name,
+        type: 'line',
+        smooth: true,
+        symbol: 'none',
+        emphasis: { focus: 'series' },
+        data: data,
+      });
+      selected[name] = isDefaultVisible;
+    });
+
+    chartInstance.current.setOption({ 
+      legend: { data: sensorNames, selected: selected },
+      series: series 
+    }, { notMerge: true });
+  }, [logStream]);
+
+  return <div ref={chartRef} className="w-full h-full" />;
+};
 
 interface BoardStatus {
   board_id: string;
@@ -22,6 +150,7 @@ interface BoardStatus {
   resurrection_gap?: string;
   errors: string[];
   kernel_stream?: string[];
+  cm55_stream?: string[];
 }
 
 interface Rig {
@@ -182,18 +311,18 @@ export default function BoardDetailPage() {
               </div>
             </div>
 
-            {/* Terminal */}
+            {/* Temperature Module */}
             <div className="p-8 lg:col-span-4 flex flex-col bg-black/20 min-h-0">
                <div className="flex justify-between items-center mb-6 flex-shrink-0">
-                 <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em]">Activity Stream</h3>
+                 <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em]">Temperature Analytics</h3>
                  <div className="flex gap-4">
-                    {board.status === 'Error' && <span className="text-[9px] bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded border border-rose-500/30 font-black">FAILED</span>}
+                    {board.status === 'Error' && <span className="text-[9px] bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded border border-rose-500/30 font-black">STRESS CEILING</span>}
                     <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                        <div className="relative flex items-center justify-center">
                           <div className="absolute w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
                           <div className="relative w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                        </div>
-                       Live Flow
+                       Telemetry Active
                     </span>
                  </div>
                </div>
@@ -209,18 +338,13 @@ export default function BoardDetailPage() {
                   </div>
                )}
 
-               <div className="flex-1 bg-[#020202] border border-zinc-800/80 rounded-2xl p-6 font-mono text-[13px] text-zinc-400 overflow-hidden relative shadow-inner flex flex-col min-h-0">
-                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-4">
-                     {board.kernel_stream && board.kernel_stream.length > 0 ? (
-                       board.kernel_stream.slice(-100).map((log, idx) => (
-                         <div key={idx} className="flex gap-4">
-                            <span className="text-zinc-800 text-[10px] w-8 shrink-0 text-right">{idx + 1}</span>
-                            <p className="whitespace-pre-wrap break-all">{log}</p>
-                         </div>
-                       ))
+               <div className="flex-1 bg-[#020202] border border-zinc-800/80 rounded-2xl p-6 overflow-hidden relative shadow-inner flex flex-col min-h-0">
+                  <div className="flex-1 min-h-0">
+                     {board.cm55_stream && board.cm55_stream.length > 0 ? (
+                       <TemperatureChart logStream={board.cm55_stream} />
                      ) : (
                        <div className="h-full flex items-center justify-center text-zinc-700 italic text-[10px] uppercase tracking-widest">
-                          Awaiting stream...
+                          Awaiting temperature telemetry...
                        </div>
                      )}
                   </div>

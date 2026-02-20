@@ -37,6 +37,14 @@ async def get_rig_status(rig_id: str):
         raise HTTPException(status_code=404, detail="Rig not found")
     return data
 
+@app.delete("/api/status/{rig_id}")
+async def delete_rig(rig_id: str):
+    """删除特定台架"""
+    success = store.delete_rig(rig_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Rig not found")
+    return {"status": "success", "message": f"Rig {rig_id} deleted"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
