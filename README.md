@@ -1,18 +1,32 @@
-# Titan Node: 分布式台架监控系统
+# Titan Node
 
-这是一套专为嵌入式台架测试设计的分布式监控系统，支持实时日志解析、温度监测、Loop 连续性检查以及 Hang 机自动报警。
+**Titan Node** 是一套专为嵌入式台架测试设计的分布式监控系统，提供工业级的高颜值大屏看板，支持实时日志解析、温度监测、任务连续性检查以及软硬件异常自动报警。
 
-## 1. 系统架构
+## 🌟 核心特性
 
-- **Agent (Python)**: 运行在测试机上，负责扫描日志、解析 Kernel/CM55 日志对，并定时上报状态。
-- **Backend (FastAPI)**: 接收 Agent 数据，维护全局台架状态，提供 API 供前端查询。
-- **Frontend (Next.js + Tailwind)**: 工业级深色看板，可视化显示所有台架的健康度、进度、温度及详细日志。
+- **动态智能仪表盘**: 基于 Next.js + TailwindCSS 打造的深色系监控面板。提供炫酷的呼吸灯（Live/Lag）和按任务类型动态分组的瀑布流卡片。
+- **全屏沉浸式详情页**: 单板级别的深度监控，提供独立固定的滚动终端面板（Activity Stream），实时展示最后 50 行 Kernel 日志。
+- **多维度健康指标**: SoC 和 DDR 核心温度分离显示（带高低温色彩预警）、任务进度预估计算、心跳监测及 lag 时间计算。
+- **无缝环境部署**:
+  - **分布式 Agent**: 可在任意台架边缘节点运行，仅需配置一次 `config.json` 即可无视 Git 覆盖，稳定向云端推送数据。
+  - **集中式 Frontend**: 提供中心化配置 `config.ts`，方便一键切换生产 API 环境。
+- **智能日志配对**:
+  - 自动识别并配对 Kernel (`_id.log`) 和 CM55 (`_id_cm55.log`) 异步日志流。
+  - 支持容错命名（包含 copy 等标志），自动阻断版本号（如 V2107）干扰。
 
 ---
 
-## 2. 快速开始
+## 🏗️ 系统架构
 
-### 2.1 后端启动 (Backend)
+- **Agent (Python)**: 运行在测试机台 (Edge) 上，负责轮询提取增量日志流（Kernel/CM55），提取关键状态并上报。
+- **Backend (FastAPI)**: 轻量级异步后端系统，基于 Pydantic 构建数据模型，在内存中维护全局 Rig 与 Board 状态树。
+- **Frontend (Next.js)**: 工业级看板，定时轮询 Backend 数据，实现 UI 的动态无刷新渲染。
+
+---
+
+## 🚀 快速开始
+
+### 1. 启动中心后端 (Backend)
 
 确保已安装 Python 3.9+。
 
@@ -22,11 +36,12 @@ pip install fastapi uvicorn pydantic requests
 python3 main.py
 ```
 
-默认运行在: `http://localhost:8000`
+默认运行在 `http://127.0.0.1:8000` (如果需要局域网访问，可修改 `main.py` 中的 host 为 `0.0.0.0`)。
 
-### 2.2 前端启动 (Frontend)
+### 2. 启动前端看板 (Frontend)
 
 需要 Node.js 20+。
+部署前，请视实际情况修改 `frontend/src/config.ts` 中的 `API_BASE_URL` 为你后端的公网或局域网 IP。
 
 ```bash
 cd frontend
@@ -34,61 +49,48 @@ npm install
 npm run dev
 ```
 
-访问地址: [http://localhost:3000](http://localhost:3000)
+访问地址: `http://localhost:3000`
 
-### 2.3 Agent 启动 (Agent)
+### 3. 在测试台架上运行 Agent
 
-在每一台需要监控的台架上运行。
+在每一台需要被监控的物理测试用例机上运行。
+首次运行前，请确认 `Agent/config.json` 中的 `BACKEND_URL` 指向了中心服务器（如：`http://your-server-ip:8000/api/report`），该配置文件默认被 Git 忽略，方便本地独立维护更新。
 
 ```bash
 cd Agent
 python3 agent.py
 ```
 
-**启动后需交互操作**：
+**交互式配置启动**：
 
-1. 输入日志根目录 (例如 `./logs`)。
-2. 选择要监控的特定 Case 文件夹。
-3. 选择任务类型（如 `固定低温反复启动`）。
+1. 指定台架名称（如默认的 `Rig-01`，或当前物理物理机代号）。
+2. 输入日志挂载或生成的根目录 (例如 `./logs`)。
+3. 可视化选择要监控的特定 Case 测试文件夹。
+4. 选择当前执行的任务类型（如 `固定低温反复启动`）。
 
----
-
-## 3. 核心功能说明
-
-### 3.1 异常检测 (Watchdog)
-
-系统会自动提取 Kernel 日志最后一行的时间戳：
-
-- **Hang 检测**：如果最后一条日志的时间与当前系统时间差距超过 **5 分钟**，系统会判定板子已死机，前端亮起 **"HANG"** 警示。
-
-### 3.2 固定低温反复启动专用逻辑
-
-- **Loop 连续性**：Agent 会实时统计 `BMX7 DDR Reboot Test: Loop[n]`。
-- **逻辑校验**：如果 Loop 次数发生非预期的回退（例如从 10 变为 1），系统将立即判定为 `Error`。
-
-### 3.3 看板导航
-
-- **主页 (Dashboard)**：显示所有 Rig 的概览，每个板子的小方块内直接显示当前温度。
-- **详情页 (Detail Analysis)**：点击卡片右下角，进入查看详细的 Kernel 日志流片段和具体错误列表。
+Agent 会开始按设定的时间间隔 (默认为 30s) 不断采集、配对最新的日志内容并向 Backend 上报。
 
 ---
 
-## 4. 目录结构
+## 📂 核心目录结构
 
 ```text
 Titan-Node/
 ├── Agent/
-│   └── agent.py         # 核心采集逻辑
+│   ├── agent.py               # 分布式边缘采集主程序
+│   └── config.json            # (自动生成) Edge 端独立配置文件，防 Git 覆盖
 ├── Backend/
-│   ├── main.py          # API 入口
-│   ├── models.py        # 数据模型
-│   └── store.py         # 内存状态存储
+│   ├── main.py                # FastAPI API 服务入口
+│   ├── models.py              # 数据模型定义
+│   └── store.py               # 内存状态树管理
 ├── frontend/
-│   └── src/app/         # Next.js 页面与组件
-└── logs/                # 测试日志存放处 (示例)
+│   ├── src/config.ts          # 前端全局配置中心 (API URL, 刷新频率)
+│   ├── src/app/page.tsx       # 全局主大屏 Dashboard
+│   └── src/app/rig/           # 包含 / rig 聚合详情 和 /board 单板下钻剖析页
+└── logs/                      # 测试日志模拟存放处
 ```
 
-## 5. 开发建议
+## 🔧 自定义与扩展
 
-- **日志清理**：建议定期归档旧日志，Agent 每次启动都会重新配对最新的文件。
-- **扩展任务**：如需增加新的 `Task Type` 解析逻辑，请修改 `Agent/agent.py` 中的 `parse_logs` 方法。
+- **新增日志解析逻辑**：如果后续需要提取新型 MCU 日志或更多模块温度，请扩展 `Agent/agent.py` 中的 `parse_logs` 方法的正则表达式规则。
+- **前端配色自定义**：请查阅 `frontend/tailwind.config.ts` 以及位于 `src/app/globals.css` 中的自定义呼吸灯（`animate-breath` / `custom-scrollbar`）设定。

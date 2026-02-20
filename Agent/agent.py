@@ -6,9 +6,25 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional
 
-# --- 配置 (可通过环境变量或配置文件扩展) ---
-BACKEND_URL = "http://120.24.88.39:8020/api/report"
-SCAN_INTERVAL = 30  # 秒
+# --- 配置管理 ---
+def load_config():
+    config_path = os.path.join(os.path.dirname(__file__), "config.json")
+    default_config = {
+        "BACKEND_URL": "http://localhost:8000/api/report",
+        "SCAN_INTERVAL": 30
+    }
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                content = json.load(f)
+                return {**default_config, **content}
+        except Exception as e:
+            print(f"Warning: Failed to load config.json: {e}")
+    return default_config
+
+AGENT_CONFIG = load_config()
+BACKEND_URL = AGENT_CONFIG["BACKEND_URL"]
+SCAN_INTERVAL = AGENT_CONFIG["SCAN_INTERVAL"]
 
 TASK_TYPES = [
     "固定低温反复启动",
