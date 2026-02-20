@@ -174,79 +174,67 @@ class Agent:
             "errors": []
         }
 
-        # 1. 解析 CM55 日志获取最新温度
+        # 1. 解析 CM55 日志获取全量温度历史
         if pair.cm55_file:
             path = os.path.join(self.selected_case_dir, pair.cm55_file)
             try:
-                # 增加读取量到 100KB，以获取更长的历史曲线
-                with open(path, "rb") as f:
-                    f.seek(0, os.SEEK_END)
-                    pos = f.tell()
-                    chunk_size = 100000
-                    f.seek(max(0, pos - chunk_size))
-                    tail = f.read(chunk_size).decode('utf-8', errors='ignore')
+                # 从头开始读取全量日志以获取完整历史曲线
+                with open(path, "r", encoding='utf-8', errors='ignore') as f:
+                    full_content = f.read()
                     
                     # 提取最新心跳时间
-                    cm_ts_match = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', tail)
+                    cm_ts_match = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', full_content)
                     if cm_ts_match:
                         status_data["cm55_heartbeat"] = cm_ts_match[-1]
 
-                    # 1. 提取所有 PVTC 标签及其对应的【最后一次】出现的数值 以及 Overtemp Warning
-                    sensor_data = {}
-                    pvtc_matches = re.finditer(r'\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-.\d]+)\s*C', tail)
-                    for match in pvtc_matches:
-                        sensor_name, value = match.groups()
-                        sensor_data[sensor_name] = float(value)
-                    
-                    # 检查超温警告
-                    if "W/NO_TAG THM_INFO: warning:check_temp exceed!!!" in tail:
-                        if status_data["status"] == "Running":
-                            status_data["status"] = "Warning"
+                    # 检查超温警告 (扫描全文)
+                    if "W/NO_TAG THM_INFO: warning:check_temp exceed!!!" in full_content:
+                        status_data["status"] = "Warning"
                         if "Overtemp warning from CM55" not in status_data["errors"]:
                             status_data["errors"].append("Overtemp warning from CM55")
 
-                    # --- 优化：在 Agent 本地处理温度历史点 ---
-                    all_lines = tail.splitlines()
-                    # 仅保留最近300行的历史数据，降低网络压力
-                    temp_lines = [l for l in all_lines if "thm log handler" in l or "PVTC_TS_SOC" in l][-300:]
-                    temp_points = []
-                    
-                    # 提前编译正则，提高性能
+                    # --- 改进：Agent 本地全量解析并抽样 ---
+                    # 匹配所有满足条件的温度行
                     regex = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C')
-                    for line in temp_lines:
-                        match = regex.search(line)
-                        if match:
-                            # 提前转换为时间戳+名字+数值的组合
-                            timeStr, sensorName, valStr = match.groups()
-                            # 我们只关注 CPU/DDR/MIN 这种核心数据来画图，其他忽略以减少数据量
-                            if "CPU" in sensorName.upper() or "DDR" in sensorName.upper() or "MIN" in sensorName.upper():
-                                try:
-                                    dt = datetime.strptime(timeStr, "%Y-%m-%d %H:%M:%S")
-                                    ts = int(dt.timestamp() * 1000)
-                                    temp_points.append({"ts": ts, "name": sensorName, "val": float(valStr)})
-                                except ValueError:
-                                    pass
-                    status_data["temp_points"] = temp_points
+                    all_matches = regex.findall(full_content)
                     
-                    if sensor_data:
-                        temps = sensor_data.values()
+                    raw_points = []
+                    sensor_latest = {}
+                    for timeStr, sensorName, valStr in all_matches:
+                        # 记录所有传感器的最后一次值用于仪表盘
+                        val = float(valStr)
+                        sensor_latest[sensorName] = val
+                        
+                        # 仅保留核心传感器的数据点用于绘图
+                        if "CPU" in sensorName.upper() or "DDR" in sensorName.upper() or "MIN" in sensorName.upper():
+                            try:
+                                dt = datetime.strptime(timeStr, "%Y-%m-%d %H:%M:%S")
+                                ts = int(dt.timestamp() * 1000)
+                                raw_points.append({"ts": ts, "name": sensorName, "val": val})
+                            except ValueError:
+                                pass
+                    
+                    # 更新当前实时数值
+                    if sensor_latest:
+                        temps = sensor_latest.values()
                         status_data["temp_min"] = min(temps)
                         status_data["temperature"] = status_data["temp_min"]
-                        
-                        ddr_val = None
-                        for name, val in sensor_data.items():
-                            if "TS6_DDR" in name:
-                                ddr_val = val
-                                break
-                        if ddr_val is None:
-                            for name, val in sensor_data.items():
-                                if "DDR" in name.upper():
-                                    ddr_val = val
-                                    break
+                        # 查找 DDR 温度
+                        ddr_val = next((v for k, v in sensor_latest.items() if "TS6_DDR" in k), 
+                                  next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), None))
                         if ddr_val is not None:
                             status_data["temp_ddr"] = ddr_val
+
+                    # --- 智能抽样：如果数据点太多（例如超过500点），进行等间隔抽样以保护前端渲染和带宽 ---
+                    MAX_POINTS = 500
+                    if len(raw_points) > MAX_POINTS:
+                        step = len(raw_points) // MAX_POINTS
+                        status_data["temp_points"] = raw_points[::step]
+                    else:
+                        status_data["temp_points"] = raw_points
+
             except Exception as e:
-                print(f"[❌ {board_id}] CM55 解析失败: {e}")
+                print(f"[❌ {board_id}] CM55 全量解析失败: {e}")
 
         # 2. 解析 Kernel 日志
         if pair.kernel_file:
