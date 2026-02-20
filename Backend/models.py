@@ -22,6 +22,7 @@ class BoardStatus(BaseModel):
     is_hang: bool = False
     errors: List[str] = []
     kernel_stream: List[str] = []
+    ddr_details: dict = {}
     temp_points: List[dict] = []
     last_updated: datetime = Field(default_factory=datetime.now)
 

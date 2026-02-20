@@ -173,6 +173,7 @@ interface BoardStatus {
   resurrection_gap?: string;
   errors: string[];
   kernel_stream?: string[];
+  ddr_details?: Record<string, number>;
   temp_points?: Array<{ts: number, name: string, val: number}>;
 }
 
@@ -278,9 +279,9 @@ export default function BoardDetailPage() {
 
       <main className="max-w-[1500px] w-full mx-auto flex-1 flex flex-col min-h-0">
         <div className="bg-[#0a0a0b] border border-zinc-800/50 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-0 relative">
-          <div className={`grid grid-cols-1 ${sidebarCollapsed ? 'lg:grid-cols-[80px_1fr]' : 'lg:grid-cols-5'} h-full flex-1 min-h-0 transition-all duration-300`}>
-            {/* Sidebar */}
-            <div className={`relative border-b lg:border-b-0 lg:border-r border-zinc-800/50 bg-zinc-900/40 custom-scrollbar flex-shrink-0 lg:flex-shrink transition-all duration-300 ${sidebarCollapsed ? 'p-2 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
+          <div className="flex h-full flex-1 min-h-0 transition-all duration-300">
+            {/* Sidebar - Precision Dock */}
+            <div className={`relative border-r border-zinc-800/50 bg-[#0c0c0d] flex-shrink-0 transition-all duration-500 overflow-hidden flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-72 md:w-80'}`}>
               
               {/* Collapse Toggle Button */}
               <button 
@@ -290,122 +291,203 @@ export default function BoardDetailPage() {
                 {sidebarCollapsed ? '→' : '←'}
               </button>
 
-              {sidebarCollapsed ? (
-                <div className="flex flex-col items-center gap-8 mt-6">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 font-black italic text-sm">
-                    {board.board_id.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div className="flex flex-col gap-4">
-                    <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
-                    <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
-                  </div>
-                  <div className="flex flex-col gap-3 mt-4 text-[10px] font-black text-zinc-500 tabular-nums">
-                    <div className="rotate-90 origin-center whitespace-nowrap">{board.temp_min?.toFixed(0)}°</div>
-                    <div className="rotate-90 origin-center whitespace-nowrap text-rose-500">{board.temp_max?.toFixed(0)}°</div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 md:space-y-6">
-                  <div className="flex justify-between items-start mb-4 md:mb-8">
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-4xl font-black italic text-emerald-400 tracking-tighter leading-none truncate">{board.board_id}</span>
-                      <div className="flex gap-2 mt-4 bg-black/40 p-2 rounded-xl border border-white/5 w-fit">
-                        <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
-                        <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
-                      </div>
-                    </div>
-                    <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tighter h-fit shrink-0 ${
-                      board.status === 'Error' ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400' : 
-                      board.resurrection_gap ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 animate-pulse' :
-                      board.status === 'Running' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-zinc-800/30 text-zinc-500'
-                    }`}>
-                      {board.resurrection_gap ? 'Recovered' : board.status}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-                    <div className="min-w-0 overflow-hidden">
-                      <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-1">Operational Task</p>
-                      <p className="text-sm font-bold text-zinc-300 leading-tight truncate">{board.task_type}</p>
-                      {board.start_time && (
-                        <div className="mt-2 text-[10px] font-mono text-zinc-500">
-                          {new Date(board.start_time).toLocaleString('zh-CN')}
-                        </div>
-                      )}
+              <div className="flex-1 flex flex-col min-h-0 custom-scrollbar">
+                {sidebarCollapsed ? (
+                  /* --- ICON ONLY MODE --- */
+                  <div className="flex flex-col items-center py-10 gap-12 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 font-black italic text-sm shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                      {board.board_id.substring(0, 1).toUpperCase()}
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className={`p-3 md:p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
-                        <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>SoC Range</p>
-                        <p className={`text-lg md:text-xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500'}`}>
-                          {board.temp_min?.toFixed(0)} - {board.temp_max?.toFixed(0)}°
-                        </p>
-                      </div>
-                      <div className={`p-3 md:p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
-                        <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>DDR TS6</p>
-                        <p className={`text-lg md:text-xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-sky-500'}`}>{board.temp_ddr?.toFixed(0)}°</p>
-                      </div>
-                    </div>
-                  </div>
+                    <div className="flex flex-col items-center gap-8">
+                       <div className="group relative p-2.5 rounded-xl bg-zinc-900/50 border border-white/5 text-zinc-500 hover:text-emerald-400 transition-all">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 2.6-2 3.5 0 1 1 2 2 2h15c1 0 2-1 2-2 0-.9-.5-2.24-2-3.5"/><path d="M12 15c3.31 0 6-2.69 6-6s-2.69-6-6-6-6 2.69-6 6 2.69 6 6 6Z"/><path d="m12 15-3.92 4.08a1 1 0 0 1-1.42 0l-1.08-1.08"/><path d="m12 15 3.92 4.08a1 1 0 0 0 1.42 0l1.08-1.08"/></svg>
+                          <div className="flex flex-col gap-2 mt-4 items-center">
+                            <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
+                            <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
+                          </div>
+                       </div>
 
-                  <div className="pt-4 md:pt-6 border-t border-zinc-800/50">
-                    <div className="flex justify-between items-end mb-3">
-                       <span className="text-[9px] text-zinc-500 uppercase font-black">Lifecycle Progress</span>
-                       <span className="text-xl font-black text-emerald-500 tracking-tighter tabular-nums">{Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="h-3 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
-                      <div 
-                        className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-1000"
-                        style={{ width: `${Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between mt-4 text-[10px] font-black uppercase text-zinc-600">
-                       <span>{board.elapsed_hours.toFixed(1)}h elapsed</span>
-                       <span>Loop {board.current_loop || 0}</span>
+                       <div className="p-2.5 rounded-xl bg-zinc-900/50 border border-white/5 text-zinc-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  /* --- FULL CONTENT MODE --- */
+                  <div className="p-8 space-y-10 animate-in fade-in slide-in-from-left-4 duration-500">
+                    <div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-4xl font-black italic text-emerald-400 tracking-tighter leading-none truncate mb-6">{board.board_id}</span>
+                        <div className="flex gap-3 bg-black/40 p-3 rounded-2xl border border-white/5 w-fit">
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-[7px] font-black text-zinc-600 uppercase">Kernel</span>
+                            <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
+                          </div>
+                          <div className="w-px h-6 bg-zinc-800 self-center" />
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-[7px] font-black text-zinc-600 uppercase">CM55</span>
+                            <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-8">
+                      <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                        <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-2 flex items-center gap-2">
+                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Operational Task
+                        </p>
+                        <p className="text-sm font-bold text-zinc-300 leading-tight">{board.task_type}</p>
+                        {board.start_time && (
+                          <div className="mt-3 text-[10px] font-mono text-zinc-600 bg-black/30 px-2 py-1 rounded w-fit italic">
+                            Started: {new Date(board.start_time).toLocaleString('zh-CN')}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-8 border-t border-zinc-800/50">
+                        <div className="flex justify-between items-end mb-4">
+                           <span className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">Progress</span>
+                           <span className="text-2xl font-black text-emerald-500 tracking-tighter tabular-nums leading-none">
+                             {Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}<span className="text-xs ml-0.5">%</span>
+                           </span>
+                        </div>
+                        <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5 p-1">
+                          <div 
+                            className="h-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-300 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all duration-1000"
+                            style={{ width: `${Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between mt-6 text-[10px] font-black uppercase text-zinc-600 tracking-widest">
+                           <div className="flex flex-col">
+                             <span className="text-[8px] opacity-50 mb-1">Time Elapsed</span>
+                             <span className="text-zinc-400">{board.elapsed_hours.toFixed(1)}h</span>
+                           </div>
+                           <div className="flex flex-col items-end">
+                             <span className="text-[8px] opacity-50 mb-1">Current Loop</span>
+                             <span className="text-emerald-500/80">{board.current_loop || 0}</span>
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Temperature Module */}
-            <div className={`p-4 md:p-8 flex flex-col bg-black/20 min-h-0 transition-all duration-300 ${sidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-4'}`}>
-               <div className="flex justify-between items-center mb-6 flex-shrink-0">
-                 <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em]">Temperature Analytics</h3>
-                 <div className="flex gap-4 items-center">
-                    {board.status === 'Error' && <span className="text-[9px] bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded border border-rose-500/30 font-black">STRESS CEILING / ERROR</span>}
-                    {board.status === 'Warning' && <span className="text-[9px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 font-black">THERMAL WARNING</span>}
-                    <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
-                       <div className="relative flex items-center justify-center">
-                          <div className="absolute w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-                          <div className="relative w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                       </div>
-                       Telemetry Active
-                    </span>
-                 </div>
-               </div>
+            {/* --- MAIN FLUID PANEL --- */}
+            <div className="flex-1 flex flex-col min-h-0 bg-[#080809] overflow-hidden">
+               
+               {/* Header Info Banner - Dynamic Relocation */}
+               <div className="px-6 py-5 md:px-10 md:py-8 bg-[#0c0c0d] border-b border-zinc-800/60 shadow-xl z-20 flex flex-wrap items-center gap-8 md:gap-12">
+                  <div className="flex items-center gap-5">
+                     <div className="w-1.5 h-10 bg-gradient-to-b from-emerald-500 to-emerald-800 rounded-full" />
+                     <div className="flex flex-col">
+                        <p className="text-[10px] text-zinc-500 uppercase font-black tracking-[0.2em] mb-1">SoC Thermals (Min/Max)</p>
+                        <div className="flex items-end gap-3">
+                           <p className="text-3xl md:text-4xl font-black text-zinc-100 tabular-nums tracking-tighter leading-none">
+                             <span className="text-emerald-400 group-hover:scale-110 transition-transform inline-block">{board.temp_min?.toFixed(0)}</span>
+                             <span className="mx-2 text-zinc-800 font-light">/</span>
+                             <span className={`${board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500'} inline-block`}>
+                               {board.temp_max?.toFixed(0)}
+                             </span>
+                           </p>
+                           <span className="text-sm font-black text-zinc-600 mb-1">°C</span>
+                        </div>
+                     </div>
+                  </div>
 
-               {board.status === 'Error' && board.errors.length > 0 && (
-                  <div className="mb-6 bg-rose-500/5 border-l-4 border-rose-500 p-5 rounded-r-2xl flex-shrink-0">
-                    <p className="text-[10px] text-rose-500 uppercase font-black mb-2">Failure Reason</p>
-                    <div className="space-y-1 overflow-hidden">
-                      {board.errors.map((err, i) => (
-                        <p key={i} className="text-sm font-bold text-rose-200 break-words leading-relaxed"># {err}</p>
-                      ))}
+                  <div className="flex items-center gap-6 bg-zinc-900/30 px-6 py-3 rounded-2xl border border-white/5 hover:border-sky-500/30 transition-all">
+                     <div className="flex flex-col">
+                        <p className="text-[9px] text-zinc-600 uppercase font-black tracking-widest mb-1">DDR TS6 Edge</p>
+                        <p className="text-2xl md:text-3xl font-black text-sky-400 tabular-nums leading-none tracking-tight">
+                          {board.temp_ddr?.toFixed(0)}<span className="text-sm ml-0.5 text-zinc-600 font-bold">°</span>
+                        </p>
+                     </div>
+                  </div>
+
+                  {board.ddr_details && Object.keys(board.ddr_details).length > 0 && (
+                    <div className="flex flex-col gap-1.5 border-l border-zinc-800/50 pl-8">
+                       <p className="text-[8px] text-zinc-600 uppercase font-black tracking-[0.2em]">DDR CLUSTER (TS1-6)</p>
+                       <div className="flex flex-wrap gap-2">
+                          {Object.entries(board.ddr_details)
+                            .sort((a, b) => a[0].localeCompare(b[0]))
+                            .map(([name, val]) => (
+                               <div key={name} className="flex items-center gap-2 bg-zinc-900/80 px-2 py-1 rounded-md border border-white/5">
+                                  <span className="text-[9px] font-black text-zinc-500">{name}</span>
+                                  <span className="text-xs font-black text-sky-500 tabular-nums">{val.toFixed(0)}°</span>
+                               </div>
+                            ))
+                          }
+                       </div>
+                    </div>
+                  )}
+
+                  {/* Nodes Legend Summary (Compact) */}
+                  <div className="ml-auto flex items-center gap-6">
+                    <div className="hidden sm:flex flex-col items-end">
+                      <p className="text-[9px] text-zinc-600 uppercase font-black tracking-widest mb-1">System Status</p>
+                      <div className="flex items-center gap-3">
+                         <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
+                            board.status === 'Running' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                            board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                            'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                         }`}>
+                           {board.status}
+                         </span>
+                         <div className="flex items-center gap-2 px-2 py-0.5 bg-black/40 rounded border border-white/5">
+                            <div className="relative w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]">
+                               <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-75" />
+                            </div>
+                            <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-tighter">Live Relay</span>
+                         </div>
+                      </div>
                     </div>
                   </div>
-               )}
+               </div>
 
-                <div className="flex-1 bg-[#020202] border border-zinc-800/80 rounded-2xl p-4 md:p-6 overflow-hidden relative shadow-inner flex flex-col min-h-[350px] md:min-h-0">
-                  <div className="flex-1 min-h-0 h-[300px] md:h-full">
-                     {board.temp_points && board.temp_points.length > 0 ? (
-                       <TemperatureChart dataPoints={board.temp_points} />
-                     ) : (
-                       <div className="h-full flex items-center justify-center text-zinc-700 italic text-[10px] uppercase tracking-widest">
-                          Awaiting temperature telemetry...
-                       </div>
-                     )}
-                  </div>
+               <div className="flex-1 flex flex-col p-4 md:p-8 space-y-8 overflow-hidden">
+                 <div className="flex justify-between items-center flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-emerald-500 rotate-45" />
+                      <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.4em]">Integrated Waveform Analytics</h3>
+                    </div>
+                 </div>
+
+                 {board.status === 'Error' && board.errors.length > 0 && (
+                    <div className="flex-shrink-0 bg-rose-500/5 border border-rose-500/20 p-6 rounded-3xl backdrop-blur-sm shadow-2xl animate-in slide-in-from-top-4 duration-500">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                        </div>
+                        <p className="text-xs text-rose-400 uppercase font-black tracking-widest underline decoration-rose-500/30 underline-offset-4">Critical Fault Detection</p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {board.errors.map((err, i) => (
+                          <div key={i} className="flex gap-3 bg-black/40 p-3 rounded-xl border border-rose-500/10 hover:border-rose-500/30 transition-all">
+                             <span className="text-rose-500 font-black italic">#0{i+1}</span>
+                             <p className="text-sm font-bold text-rose-100/90 leading-snug">{err}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                 )}
+
+                  <div className="flex-1 bg-black/60 border border-zinc-800/80 rounded-[2.5rem] p-6 md:p-10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col min-h-[400px] group transition-all duration-700 hover:border-emerald-500/20">
+                    <div className="flex-1 min-h-0 relative">
+                       {board.temp_points && board.temp_points.length > 0 ? (
+                         <TemperatureChart dataPoints={board.temp_points} />
+                       ) : (
+                         <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="flex flex-col items-center gap-4 animate-pulse">
+                               <div className="w-12 h-12 border-2 border-zinc-800 border-t-emerald-500 rounded-full animate-spin" />
+                               <span className="text-zinc-700 italic text-[10px] uppercase font-black tracking-[0.3em]">Synchronizing Telemetry Flux...</span>
+                            </div>
+                         </div>
+                       )}
+                    </div>
+                 </div>
                </div>
             </div>
           </div>

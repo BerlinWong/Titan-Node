@@ -194,8 +194,8 @@ class Agent:
                             status_data["errors"].append("Overtemp warning from CM55")
 
                     # --- 改进：Agent 本地全量解析并抽样 ---
-                    # 匹配所有满足条件的温度行
-                    regex = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C')
+                    # 匹配所有满足条件的温度行 (包括 SOC 和 DDR 系列)
+                    regex = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_(?:SOC|DDR)_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C')
                     all_matches = regex.findall(full_content)
                     
                     raw_points = []
@@ -206,11 +206,12 @@ class Agent:
                         sensor_latest[sensorName] = val
                         
                         # 仅保留核心传感器的数据点用于绘图
-                        if "CPU" in sensorName.upper() or "DDR" in sensorName.upper() or "MIN" in sensorName.upper():
+                        # 包含 CPU, DDR, SOC 以及 MIN 结尾的传感器
+                        if any(x in sensorName.upper() for x in ["CPU", "DDR", "SOC", "MIN"]):
                             try:
                                 dt = datetime.strptime(timeStr, "%Y-%m-%d %H:%M:%S")
                                 ts = int(dt.timestamp() * 1000)
-                                raw_points.append({"ts": ts, "name": sensorName, "val": val})
+                                raw_points.append({"ts": ts, "name": sensorName.replace("PVTC_TS_", ""), "val": val})
                             except ValueError:
                                 pass
                     
@@ -220,13 +221,16 @@ class Agent:
                         status_data["temp_min"] = min(temps)
                         status_data["temp_max"] = max(temps)
                         status_data["temperature"] = status_data["temp_min"]
-                        # 查找 DDR 温度
+                        
+                        # 特别记录 DDR 细节 (TS1-6)
+                        status_data["ddr_details"] = {k.replace("PVTC_TS_DDR_", ""): v for k, v in sensor_latest.items() if "DDR" in k.upper()}
+                        
+                        # 兼容旧字段：查找 TS6_DDR 或主 DDR 温度
                         ddr_val = next((v for k, v in sensor_latest.items() if "TS6_DDR" in k), 
-                                  next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), None))
-                        if ddr_val is not None:
-                            status_data["temp_ddr"] = ddr_val
+                                  next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), 0.0))
+                        status_data["temp_ddr"] = ddr_val
 
-                    # --- 智能抽样：如果数据点太多（例如超过500点），进行等间隔抽样以保护前端渲染和带宽 ---
+                    # --- 智能抽样：如果数据点太多（例如超过500点），进行等间隔抽样 ---
                     MAX_POINTS = 500
                     if len(raw_points) > MAX_POINTS:
                         step = len(raw_points) // MAX_POINTS
