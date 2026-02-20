@@ -76,7 +76,7 @@ python3 agent.py
 ## 4. 目录结构
 
 ```text
-status_firework/
+Titan-Node/
 ├── Agent/
 │   └── agent.py         # 核心采集逻辑
 ├── Backend/
