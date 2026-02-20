@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/Backend/main.py"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "Backend/main.py",
+      "use": "@vercel/python"
+    }
+  ]
+}

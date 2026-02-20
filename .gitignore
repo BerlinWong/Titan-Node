@@ -109,3 +109,4 @@ Temporary Items
 
 logs/*
 Agent/tools/*.log
+Agent/config.json
