@@ -8,5 +8,5 @@ export const CONFIG = {
   API_BASE_URL: process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://titan-backend.080977.xyz' : 'http://localhost:8020'),
   
   // 状态轮询间隔 (毫秒)
-  POLLING_INTERVAL: 5000,
+  POLLING_INTERVAL: 30000,
 };
