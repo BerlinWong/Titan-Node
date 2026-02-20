@@ -8,6 +8,7 @@ interface BoardStatus {
   status: 'Running' | 'Warning' | 'Error' | 'Finished';
   temperature: number;
   temp_min: number;
+  temp_max: number;
   temp_ddr: number;
   remaining_hours: number;
   elapsed_hours: number;
@@ -274,8 +275,9 @@ const RigCard = ({ rig }: { rig: Rig }) => {
                     <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} logStream={board.kernel_stream} />
                     <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
                   </div>
-                  <div className="flex gap-2 text-[9px] font-bold uppercase tracking-tighter">
+                  <div className="flex gap-2 text-[9px] font-bold uppercase tracking-tighter shrink-0">
                      <span className="text-rose-400/90">Min: {board.temp_min?.toFixed(0) || 0}°</span>
+                     <span className="text-amber-400/90">Max: {board.temp_max?.toFixed(0) || 0}°</span>
                      <span className="text-sky-400/90">DDR: {board.temp_ddr?.toFixed(0) || 0}°</span>
                   </div>
               </div>

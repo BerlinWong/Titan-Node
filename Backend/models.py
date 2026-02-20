@@ -10,6 +10,7 @@ class BoardStatus(BaseModel):
     remaining_hours: float = 48.0
     temperature: float = 0.0
     temp_min: float = 0.0
+    temp_max: float = 0.0
     temp_ddr: float = 0.0
     voltage: float = 0.0
     kernel_heartbeat: Optional[datetime] = None

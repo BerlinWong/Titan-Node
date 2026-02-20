@@ -218,6 +218,7 @@ class Agent:
                     if sensor_latest:
                         temps = sensor_latest.values()
                         status_data["temp_min"] = min(temps)
+                        status_data["temp_max"] = max(temps)
                         status_data["temperature"] = status_data["temp_min"]
                         # 查找 DDR 温度
                         ddr_val = next((v for k, v in sensor_latest.items() if "TS6_DDR" in k), 

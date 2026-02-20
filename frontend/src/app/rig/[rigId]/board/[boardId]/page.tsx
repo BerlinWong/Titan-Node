@@ -54,7 +54,7 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
       selected[name] = isDefaultVisible;
     });
 
-    // 完整的状态更新，确保包含 xAxis 和 yAxis，防止 ECharts 内部 cartesian 坐标系初始化失败
+    // 完整的状态更新
     chartInstance.current.setOption({ 
       backgroundColor: 'transparent',
       tooltip: {
@@ -80,20 +80,34 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
       },
       legend: { 
         data: sensorNames, 
-        selected: selected,
+        selected: (() => {
+          // 记忆功能逻辑
+          const savedSelection = localStorage.getItem(`legend_selection`);
+          if (savedSelection) {
+            try {
+              const parsed = JSON.parse(savedSelection);
+              // 只有当传感器名在当前列表中时才合并，否则用默认
+              const merged = { ...selected };
+              Object.keys(parsed).forEach(k => {
+                if (sensorNames.includes(k)) merged[k] = parsed[k];
+              });
+              return merged;
+            } catch(e) { return selected; }
+          }
+          return selected;
+        })(),
         type: 'scroll',
-        orient: 'vertical',
-        right: 0,
-        top: 'center',
-        // 在非常小的屏幕上隐藏图例或缩小字体
-        show: typeof window !== 'undefined' && window.innerWidth > 768,
+        orient: 'horizontal',
+        bottom: 0,
+        left: 'center',
+        padding: [0, 50],
         textStyle: { color: '#ccc', fontSize: 10 },
         pageTextStyle: { color: '#fff' }
       },
       grid: { 
         left: '2%', 
-        right: typeof window !== 'undefined' && window.innerWidth > 768 ? '130px' : '20px', 
-        bottom: '40px', 
+        right: '40px', 
+        bottom: '60px', 
         top: '30px', 
         containLabel: true 
       },
@@ -116,8 +130,8 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
         {
           show: true,
           type: 'slider',
-          bottom: 0,
-          height: 15,
+          bottom: 40,
+          height: 10,
           backgroundColor: 'rgba(255,255,255,0.02)',
           fillerColor: 'rgba(16, 185, 129, 0.2)',
           borderColor: 'transparent',
@@ -127,6 +141,14 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
       ],
       series: series 
     }, { notMerge: true });
+
+    // 监听图例点击，保存选择状态实现记忆
+    chartInstance.current.on('legendselectchanged', (params: any) => {
+       const savedSelection = localStorage.getItem(`legend_selection`);
+       let current = {};
+       try { current = savedSelection ? JSON.parse(savedSelection) : {}; } catch(e){}
+       localStorage.setItem(`legend_selection`, JSON.stringify({ ...current, ...params.selected }));
+    });
   }, [dataPoints]);
 
   return <div ref={chartRef} className="w-full h-full" />;
@@ -137,6 +159,7 @@ interface BoardStatus {
   status: 'Running' | 'Warning' | 'Error' | 'Finished';
   temperature: number;
   temp_min: number;
+  temp_max: number;
   temp_ddr: number;
   remaining_hours: number;
   elapsed_hours: number;
@@ -192,6 +215,7 @@ export default function BoardDetailPage() {
   const [rig, setRig] = useState<Rig | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const formatter = new Intl.DateTimeFormat('zh-CN', { 
@@ -253,75 +277,102 @@ export default function BoardDetailPage() {
       </header>
 
       <main className="max-w-[1500px] w-full mx-auto flex-1 flex flex-col min-h-0">
-        <div className="bg-[#0a0a0b] border border-zinc-800/50 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-0">
-          <div className="grid grid-cols-1 lg:grid-cols-5 h-full flex-1 min-h-0">
+        <div className="bg-[#0a0a0b] border border-zinc-800/50 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-0 relative">
+          <div className={`grid grid-cols-1 ${sidebarCollapsed ? 'lg:grid-cols-[80px_1fr]' : 'lg:grid-cols-5'} h-full flex-1 min-h-0 transition-all duration-300`}>
             {/* Sidebar */}
-            <div className="p-4 md:p-8 border-b lg:border-b-0 lg:border-r border-zinc-800/50 bg-zinc-900/40 overflow-y-auto custom-scrollbar flex-shrink-0 lg:flex-shrink">
-              <div className="flex justify-between items-start mb-4 md:mb-8">
-                <div className="flex flex-col min-w-0">
-                  <span className="text-4xl font-black italic text-emerald-400 tracking-tighter leading-none truncate">{board.board_id}</span>
-                  <div className="flex gap-2 mt-4 bg-black/40 p-2 rounded-xl border border-white/5 w-fit">
+            <div className={`relative border-b lg:border-b-0 lg:border-r border-zinc-800/50 bg-zinc-900/40 custom-scrollbar flex-shrink-0 lg:flex-shrink transition-all duration-300 ${sidebarCollapsed ? 'p-2 overflow-hidden' : 'p-4 md:p-8 overflow-y-auto'}`}>
+              
+              {/* Collapse Toggle Button */}
+              <button 
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-[100] w-6 h-12 bg-zinc-800 border border-zinc-700 rounded-full items-center justify-center text-zinc-400 hover:text-emerald-500 hover:bg-zinc-700 transition-all shadow-xl font-bold"
+              >
+                {sidebarCollapsed ? '→' : '←'}
+              </button>
+
+              {sidebarCollapsed ? (
+                <div className="flex flex-col items-center gap-8 mt-6">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 font-black italic text-sm">
+                    {board.board_id.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col gap-4">
                     <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
                     <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
                   </div>
+                  <div className="flex flex-col gap-3 mt-4 text-[10px] font-black text-zinc-500 tabular-nums">
+                    <div className="rotate-90 origin-center whitespace-nowrap">{board.temp_min?.toFixed(0)}°</div>
+                    <div className="rotate-90 origin-center whitespace-nowrap text-rose-500">{board.temp_max?.toFixed(0)}°</div>
+                  </div>
                 </div>
-                <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tighter h-fit shrink-0 ${
-                  board.status === 'Error' ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400' : 
-                  board.resurrection_gap ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 animate-pulse' :
-                  board.status === 'Running' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-zinc-800/30 text-zinc-500'
-                }`}>
-                  {board.resurrection_gap ? 'Recovered' : board.status}
-                </span>
-              </div>
-
-              <div className="space-y-4 md:space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-                  <div className="min-w-0 overflow-hidden">
-                    <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-1">Operational Task</p>
-                    <p className="text-sm font-bold text-zinc-300 leading-tight truncate">{board.task_type}</p>
-                    {board.start_time && (
-                      <div className="mt-2 text-[10px] font-mono text-zinc-500">
-                        {new Date(board.start_time).toLocaleString('zh-CN')}
+              ) : (
+                <div className="space-y-4 md:space-y-6">
+                  <div className="flex justify-between items-start mb-4 md:mb-8">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-4xl font-black italic text-emerald-400 tracking-tighter leading-none truncate">{board.board_id}</span>
+                      <div className="flex gap-2 mt-4 bg-black/40 p-2 rounded-xl border border-white/5 w-fit">
+                        <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
+                        <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className={`p-3 md:p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
-                      <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>SoC Min</p>
-                      <p className={`text-xl md:text-2xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500'}`}>{board.temp_min.toFixed(1)}°</p>
                     </div>
-                    <div className={`p-3 md:p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
-                      <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>DDR TS6</p>
-                      <p className={`text-xl md:text-2xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-sky-500'}`}>{board.temp_ddr.toFixed(1)}°</p>
-                    </div>
+                    <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tighter h-fit shrink-0 ${
+                      board.status === 'Error' ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400' : 
+                      board.resurrection_gap ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 animate-pulse' :
+                      board.status === 'Running' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-zinc-800/30 text-zinc-500'
+                    }`}>
+                      {board.resurrection_gap ? 'Recovered' : board.status}
+                    </span>
                   </div>
-                </div>
 
-                <div className="pt-4 md:pt-6 border-t border-zinc-800/50">
-                  <div className="flex justify-between items-end mb-3">
-                     <span className="text-[9px] text-zinc-500 uppercase font-black">Lifecycle Progress</span>
-                     <span className="text-xl font-black text-emerald-500 tracking-tighter tabular-nums">{Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}%</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                    <div className="min-w-0 overflow-hidden">
+                      <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-1">Operational Task</p>
+                      <p className="text-sm font-bold text-zinc-300 leading-tight truncate">{board.task_type}</p>
+                      {board.start_time && (
+                        <div className="mt-2 text-[10px] font-mono text-zinc-500">
+                          {new Date(board.start_time).toLocaleString('zh-CN')}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className={`p-3 md:p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
+                        <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>SoC Range</p>
+                        <p className={`text-lg md:text-xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500'}`}>
+                          {board.temp_min?.toFixed(0)} - {board.temp_max?.toFixed(0)}°
+                        </p>
+                      </div>
+                      <div className={`p-3 md:p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
+                        <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>DDR TS6</p>
+                        <p className={`text-lg md:text-xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-sky-500'}`}>{board.temp_ddr?.toFixed(0)}°</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-3 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-1000"
-                      style={{ width: `${Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between mt-4 text-[10px] font-black uppercase text-zinc-600">
-                     <span>{board.elapsed_hours.toFixed(1)}h elapsed</span>
-                     <span>Loop {board.current_loop || 0}</span>
+
+                  <div className="pt-4 md:pt-6 border-t border-zinc-800/50">
+                    <div className="flex justify-between items-end mb-3">
+                       <span className="text-[9px] text-zinc-500 uppercase font-black">Lifecycle Progress</span>
+                       <span className="text-xl font-black text-emerald-500 tracking-tighter tabular-nums">{Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}%</span>
+                    </div>
+                    <div className="h-3 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-1000"
+                        style={{ width: `${Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-4 text-[10px] font-black uppercase text-zinc-600">
+                       <span>{board.elapsed_hours.toFixed(1)}h elapsed</span>
+                       <span>Loop {board.current_loop || 0}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Temperature Module */}
-            <div className="p-4 md:p-8 lg:col-span-4 flex flex-col bg-black/20 min-h-0">
+            <div className={`p-4 md:p-8 flex flex-col bg-black/20 min-h-0 transition-all duration-300 ${sidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-4'}`}>
                <div className="flex justify-between items-center mb-6 flex-shrink-0">
                  <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em]">Temperature Analytics</h3>
-                 <div className="flex gap-4">
+                 <div className="flex gap-4 items-center">
                     {board.status === 'Error' && <span className="text-[9px] bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded border border-rose-500/30 font-black">STRESS CEILING / ERROR</span>}
                     {board.status === 'Warning' && <span className="text-[9px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 font-black">THERMAL WARNING</span>}
                     <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
