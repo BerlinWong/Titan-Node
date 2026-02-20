@@ -4,7 +4,7 @@ from typing import Dict
 from models import RigReport
 
 # 持久化文件路径
-STATE_FILE = "/tmp/rig_status_v1.json" if os.environ.get("VERCEL") else "rig_status_v1.json"
+STATE_FILE = "rig_status_v1.json"
 
 # key: rig_id, value: RigReport
 data_store: Dict[str, RigReport] = {}

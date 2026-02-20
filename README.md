@@ -28,24 +28,28 @@
 
 ### 1. 启动中心后端 (Backend)
 
-确保已安装 Python 3.9+。
+确保已安装 Python 3.9+。该后端支持自动持久化（数据存储在本地 `rig_status_v1.json` 中），部署在独立服务器上时，即使重启服务也能恢复状态。
 
 ```bash
 cd Backend
-pip install fastapi uvicorn pydantic requests
+pip install -r requirements.txt
 python3 main.py
 ```
 
-默认运行在 `http://127.0.0.1:8000` (如果需要局域网访问，可修改 `main.py` 中的 host 为 `0.0.0.0`)。
+默认运行在 `http://0.0.0.0:8000`。
 
 ### 2. 启动前端看板 (Frontend)
 
 需要 Node.js 20+。
-部署前，请视实际情况修改 `frontend/src/config.ts` 中的 `API_BASE_URL` 为你后端的公网或局域网 IP。
+
+- **本地开发**: 修改 `frontend/src/config.ts` 或在本地创建 `.env.local`。
+- **Vercel 部署**: 在 Vercel 控制面板中添加环境变量 `NEXT_PUBLIC_API_URL`（值如 `http://你的服务器IP:8000`），即可实现前端与独立后端的通信。
 
 ```bash
 cd frontend
 npm install
+npm run build
+# 或者预览模式
 npm run dev
 ```
 
