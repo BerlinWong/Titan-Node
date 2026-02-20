@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { CONFIG } from '@/config';
 import * as echarts from 'echarts';
 
-const TemperatureChart = ({ logStream }: { logStream: string[] | undefined }) => {
+const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name: string, val: number}> | undefined }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
@@ -82,24 +82,15 @@ const TemperatureChart = ({ logStream }: { logStream: string[] | undefined }) =>
   }, []);
 
   useEffect(() => {
-    if (!chartInstance.current || !logStream || logStream.length === 0) return;
+    if (!chartInstance.current || !dataPoints || dataPoints.length === 0) return;
 
-    // 更加宽容的正则：匹配时间戳、传感器名（在方括号内）、数值
-    // 支持格式：[2024-05-20 10:00:00] ... [SENSOR_NAME] 45.5 C
-    const regex = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C/g;
     const sensorDataMap = new Map();
     
-    logStream.forEach(line => {
-      let match;
-      regex.lastIndex = 0;
-      while ((match = regex.exec(line)) !== null) {
-        const timeStr = match[1];
-        const sensorName = match[2];
-        const val = parseFloat(match[3]);
-        if (!sensorDataMap.has(sensorName)) sensorDataMap.set(sensorName, []);
-        const dateObj = new Date(timeStr.replace(/-/g, "/"));
-        sensorDataMap.get(sensorName).push([dateObj.getTime(), val]);
-      }
+    dataPoints.forEach(pt => {
+        if (!sensorDataMap.has(pt.name)) {
+            sensorDataMap.set(pt.name, []);
+        }
+        sensorDataMap.get(pt.name).push([pt.ts, pt.val]);
     });
 
     const series: any[] = [];
@@ -127,7 +118,7 @@ const TemperatureChart = ({ logStream }: { logStream: string[] | undefined }) =>
       legend: { data: sensorNames, selected: selected },
       series: series 
     }, { notMerge: true });
-  }, [logStream]);
+  }, [dataPoints]);
 
   return <div ref={chartRef} className="w-full h-full" />;
 };
@@ -150,7 +141,7 @@ interface BoardStatus {
   resurrection_gap?: string;
   errors: string[];
   kernel_stream?: string[];
-  cm55_stream?: string[];
+  temp_points?: Array<{ts: number, name: string, val: number}>;
 }
 
 interface Rig {
@@ -283,13 +274,13 @@ export default function BoardDetailPage() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-black/20 p-4 rounded-2xl border border-zinc-800/30">
-                    <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-1">SoC Min</p>
-                    <p className="text-2xl font-black text-rose-500 tabular-nums">{board.temp_min.toFixed(1)}°</p>
+                  <div className={`p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
+                    <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>SoC Min</p>
+                    <p className={`text-2xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500'}`}>{board.temp_min.toFixed(1)}°</p>
                   </div>
-                  <div className="bg-black/20 p-4 rounded-2xl border border-zinc-800/30">
-                    <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-1">DDR TS6</p>
-                    <p className="text-2xl font-black text-sky-500 tabular-nums">{board.temp_ddr.toFixed(1)}°</p>
+                  <div className={`p-4 rounded-2xl border ${board.status === 'Warning' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-zinc-800/30'}`}>
+                    <p className={`text-[9px] uppercase font-black tracking-widest mb-1 ${board.status === 'Warning' ? 'text-amber-500/70' : 'text-zinc-500'}`}>DDR TS6</p>
+                    <p className={`text-2xl font-black tabular-nums ${board.status === 'Warning' ? 'text-amber-400' : 'text-sky-500'}`}>{board.temp_ddr.toFixed(1)}°</p>
                   </div>
                 </div>
                 <div className="pt-6 border-t border-zinc-800/50">
@@ -316,7 +307,8 @@ export default function BoardDetailPage() {
                <div className="flex justify-between items-center mb-6 flex-shrink-0">
                  <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em]">Temperature Analytics</h3>
                  <div className="flex gap-4">
-                    {board.status === 'Error' && <span className="text-[9px] bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded border border-rose-500/30 font-black">STRESS CEILING</span>}
+                    {board.status === 'Error' && <span className="text-[9px] bg-rose-500/20 text-rose-500 px-2 py-0.5 rounded border border-rose-500/30 font-black">STRESS CEILING / ERROR</span>}
+                    {board.status === 'Warning' && <span className="text-[9px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 font-black">THERMAL WARNING</span>}
                     <span className="text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                        <div className="relative flex items-center justify-center">
                           <div className="absolute w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
@@ -340,8 +332,8 @@ export default function BoardDetailPage() {
 
                <div className="flex-1 bg-[#020202] border border-zinc-800/80 rounded-2xl p-6 overflow-hidden relative shadow-inner flex flex-col min-h-0">
                   <div className="flex-1 min-h-0">
-                     {board.cm55_stream && board.cm55_stream.length > 0 ? (
-                       <TemperatureChart logStream={board.cm55_stream} />
+                     {board.temp_points && board.temp_points.length > 0 ? (
+                       <TemperatureChart dataPoints={board.temp_points} />
                      ) : (
                        <div className="h-full flex items-center justify-center text-zinc-700 italic text-[10px] uppercase tracking-widest">
                           Awaiting temperature telemetry...

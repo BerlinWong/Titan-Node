@@ -20,7 +20,7 @@ interface BoardStatus {
   cm55_heartbeat?: string;
   resurrection_gap?: string;
   kernel_stream?: string[];
-  cm55_stream?: string[];
+  temp_points?: Array<{ts: number, name: string, val: number}>;
 }
 
 interface Rig {

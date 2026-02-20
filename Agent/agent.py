@@ -27,13 +27,8 @@ BACKEND_URL = AGENT_CONFIG["BACKEND_URL"]
 SCAN_INTERVAL = AGENT_CONFIG["SCAN_INTERVAL"]
 
 TASK_TYPES = [
-    "固定低温反复启动",
-    "定温stressapp",
-    "TTC stressapp",
-    "高温度fulltrain",
-    "低温quickboot",
-    "反复重启",
-    "其他"
+    "循环启动任务",
+    "固定时长任务"
 ]
 
 class LogPair:
@@ -175,7 +170,7 @@ class Agent:
             "kernel_heartbeat": None,
             "cm55_heartbeat": None,
             "kernel_stream": [],
-            "cm55_stream": [],
+            "temp_points": [],
             "errors": []
         }
 
@@ -196,19 +191,42 @@ class Agent:
                     if cm_ts_match:
                         status_data["cm55_heartbeat"] = cm_ts_match[-1]
 
-                    # --- 优化：先通过关键字筛选温度行 ---
-                    all_lines = tail.splitlines()
-                    # 过滤包含 thm log 或 PVTC 的行
-                    temp_lines = [l for l in all_lines if "thm log handler" in l or "PVTC_TS" in l]
-                    # 回传最后 300 条温度数据，确保曲线丰满
-                    status_data["cm55_stream"] = temp_lines[-300:] if len(temp_lines) > 300 else temp_lines
-
-                    # 1. 提取最新传感器数值供仪表盘展示
+                    # 1. 提取所有 PVTC 标签及其对应的【最后一次】出现的数值 以及 Overtemp Warning
                     sensor_data = {}
                     pvtc_matches = re.finditer(r'\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-.\d]+)\s*C', tail)
                     for match in pvtc_matches:
                         sensor_name, value = match.groups()
                         sensor_data[sensor_name] = float(value)
+                    
+                    # 检查超温警告
+                    if "W/NO_TAG THM_INFO: warning:check_temp exceed!!!" in tail:
+                        if status_data["status"] == "Running":
+                            status_data["status"] = "Warning"
+                        if "Overtemp warning from CM55" not in status_data["errors"]:
+                            status_data["errors"].append("Overtemp warning from CM55")
+
+                    # --- 优化：在 Agent 本地处理温度历史点 ---
+                    all_lines = tail.splitlines()
+                    # 仅保留最近300行的历史数据，降低网络压力
+                    temp_lines = [l for l in all_lines if "thm log handler" in l or "PVTC_TS_SOC" in l][-300:]
+                    temp_points = []
+                    
+                    # 提前编译正则，提高性能
+                    regex = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_SOC_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C')
+                    for line in temp_lines:
+                        match = regex.search(line)
+                        if match:
+                            # 提前转换为时间戳+名字+数值的组合
+                            timeStr, sensorName, valStr = match.groups()
+                            # 我们只关注 CPU/DDR/MIN 这种核心数据来画图，其他忽略以减少数据量
+                            if "CPU" in sensorName.upper() or "DDR" in sensorName.upper() or "MIN" in sensorName.upper():
+                                try:
+                                    dt = datetime.strptime(timeStr, "%Y-%m-%d %H:%M:%S")
+                                    ts = int(dt.timestamp() * 1000)
+                                    temp_points.append({"ts": ts, "name": sensorName, "val": float(valStr)})
+                                except ValueError:
+                                    pass
+                    status_data["temp_points"] = temp_points
                     
                     if sensor_data:
                         temps = sensor_data.values()
@@ -266,28 +284,80 @@ class Agent:
                             if elapsed >= 48:
                                 status_data["status"] = "Finished"
 
-                        # 日志超过 5 分钟没更新则判定为 Hang (仅在非 Finished 状态下判定)
-                        if status_data["status"] != "Finished" and (datetime.now() - last_log_dt).total_seconds() > 300:
-                            status_data["is_hang"] = True
-                            status_data["status"] = "Error"
-                            status_data["errors"].append(f"Watchdog: Board hung (Last log: {last_ts})")
+                        # --- 长时间不刷新判定 ---
+                        if status_data["status"] not in ["Finished", "Error"] and (datetime.now() - last_log_dt).total_seconds() > 300:
+                            # 也要考虑 CM55 的情况，如果 CM55 还没挂也不算挂
+                            cm_alive = False
+                            if status_data.get("cm55_heartbeat"):
+                                try:
+                                    cm_dt = datetime.strptime(status_data["cm55_heartbeat"], "%Y-%m-%d %H:%M:%S")
+                                    if (datetime.now() - cm_dt).total_seconds() <= 300:
+                                        cm_alive = True
+                                except: pass
+                            
+                            if not cm_alive:
+                                status_data["is_hang"] = True
+                                status_data["status"] = "Error"
+                                status_data["errors"].append(f"Hang System Error (Last log: {last_ts})")
 
-                    # --- 固定低温反复启动专用逻辑 ---
-                    if self.selected_task_type == "固定低温反复启动":
-                        # 匹配所有 Loop 次数
+                    # --- 通用异常检查 ---
+                    if "Error: Miscompare" in tail or "[Error] Mismatch" in tail:
+                        status_data["status"] = "Error"
+                        if "Miscompare / Mismatch Detected" not in status_data["errors"]:
+                            status_data["errors"].append("Miscompare / Mismatch Detected")
+
+                    # --- 根据任务类型进行分类检查 ---
+                    if self.selected_task_type == "循环启动任务":
+                        # 1. 循环启动任务
+                        if "Switch to Run Full Training Mode" in tail:
+                            status_data["status"] = "Error"
+                            if "Unexpected Full Training Mode" not in status_data["errors"]:
+                                status_data["errors"].append("Unexpected Full Training Mode")
+                                
                         loop_matches = re.findall(r'BMX7 DDR Reboot Test: Loop(\d+)', tail)
                         if loop_matches:
                             current_loop = int(loop_matches[-1])
                             status_data["current_loop"] = current_loop
                             
-                            # 连续性检查
-                            prev_loop = self.prev_loops.get(board_id)
-                            if prev_loop is not None and current_loop < prev_loop:
-                                # 正常的 Loop 应该是递增的
-                                status_data["status"] = "Error"
-                                status_data["errors"].append(f"Loop continuity check failed: Got {current_loop} after {prev_loop}")
+                            last_loop_info = self.prev_loops.get(board_id)
+                            if last_loop_info:
+                                old_loop, old_ts = last_loop_info
+                                
+                                # 不连续判定
+                                if current_loop < old_loop:
+                                    status_data["status"] = "Error"
+                                    if f"Loop continuity error: {old_loop} -> {current_loop}" not in status_data["errors"]:
+                                        status_data["errors"].append(f"Loop continuity error: {old_loop} -> {current_loop}")
+                                
+                                # Loop 卡顿时长判定
+                                if current_loop == old_loop and last_ts:
+                                    last_log_dt = datetime.strptime(last_ts, "%Y-%m-%d %H:%M:%S")
+                                    if (last_log_dt - old_ts).total_seconds() > 300:
+                                        status_data["status"] = "Error"
+                                        err_msg = f"Loop {current_loop} stuck for > 5 min"
+                                        if err_msg not in status_data["errors"]:
+                                            status_data["errors"].append(err_msg)
                             
-                            self.prev_loops[board_id] = current_loop
+                            if last_ts:
+                                self.prev_loops[board_id] = (current_loop, datetime.strptime(last_ts, "%Y-%m-%d %H:%M:%S"))
+                    else:
+                        # 2. 固定时长任务
+                        rem_match = re.findall(r'Seconds remaining: (\d+)', tail)
+                        if rem_match:
+                            remaining_sec = int(rem_match[-1])
+                            # stressapp 往往是以秒计的时长任务
+                            if remaining_sec == 0:
+                                status_data["status"] = "Finished"
+                                status_data["elapsed_hours"] = 48.0
+                                status_data["remaining_hours"] = 0.0
+                            else:
+                                # 重定向进度条以 Seconds remaining 为准
+                                # 假设整个测试目标是某种设定，这里为了展示兼容，用递减映射
+                                # 假设默认是 48h (172800秒)
+                                total_sec = 172800 
+                                elapsed_sec = max(0, total_sec - remaining_sec)
+                                status_data["elapsed_hours"] = round(elapsed_sec / 3600.0, 2)
+                                status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
 
                     # 严重错误检测 (优化版)
                     critical_keywords = ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"]
