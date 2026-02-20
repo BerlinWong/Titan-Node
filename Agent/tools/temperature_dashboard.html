@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>温度监测仪表盘 | Temperature Monitor</title>
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+      :root {
+        --primary-color: #00f2fe;
+        --secondary-color: #4facfe;
+        --bg-color: #0c0e14;
+        --card-bg: rgba(255, 255, 255, 0.05);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --text-color: #e0e0e0;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        background-color: var(--bg-color);
+        background-image:
+          radial-gradient(
+            circle at 10% 20%,
+            rgba(79, 172, 254, 0.15) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 90% 80%,
+            rgba(0, 242, 254, 0.1) 0%,
+            transparent 40%
+          );
+        color: var(--text-color);
+        min-height: 100vh;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+        width: 100%;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        background: linear-gradient(
+          135deg,
+          var(--primary-color),
+          var(--secondary-color)
+        );
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -1px;
+      }
+
+      .upload-zone {
+        position: relative;
+        background: var(--card-bg);
+        border: 2px dashed var(--glass-border);
+        border-radius: 20px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        backdrop-filter: blur(10px);
+        margin-bottom: 2rem;
+      }
+
+      .upload-zone:hover {
+        border-color: var(--primary-color);
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateY(-2px);
+      }
+
+      .upload-zone p {
+        font-weight: 500;
+        color: #aaa;
+      }
+
+      .upload-zone b {
+        color: var(--primary-color);
+      }
+
+      #fileInput {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        backdrop-filter: blur(10px);
+        transition: transform 0.3s ease;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-5px);
+        border-color: var(--primary-color);
+      }
+
+      .stat-label {
+        font-size: 0.85rem;
+        color: #888;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .stat-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .stat-unit {
+        font-size: 1rem;
+        margin-left: 4px;
+        color: var(--primary-color);
+      }
+
+      main {
+        background: var(--card-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        padding: 1.5rem;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        flex-grow: 1;
+        min-height: 500px;
+        position: relative;
+      }
+
+      #chart {
+        width: 100%;
+        height: 100%;
+        min-height: 500px;
+      }
+
+      .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--bg-color);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        border-radius: 24px;
+        display: none;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.1);
+        border-left-color: var(--primary-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: #555;
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>TempMonitor 2.0</h1>
+        <div id="fileInfo" style="color: #888; font-size: 0.9rem"></div>
+      </header>
+
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".log,.txt" />
+        <p>点击或拖拽 <b>temperature.log</b> 到这里开始分析</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">最高温度</div>
+          <div class="stat-value" id="maxTemp">
+            --<span class="stat-unit">°C</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">最低温度</div>
+          <div class="stat-value" id="minTemp">
+            --<span class="stat-unit">°C</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">采集点数</div>
+          <div class="stat-value" id="totalPoints">--</div>
+        </div>
+      </div>
+
+      <main>
+        <div id="chart"></div>
+        <div class="loading-overlay" id="loading">
+          <div class="spinner"></div>
+        </div>
+      </main>
+
+      <footer>
+        &copy; 2026 Antigravity Visualizer. 支持缩放、漫游及轨迹导出。
+      </footer>
+    </div>
+
+    <script>
+      const chartDom = document.getElementById("chart");
+      const myChart = echarts.init(chartDom, "dark");
+      const fileInput = document.getElementById("fileInput");
+      const loading = document.getElementById("loading");
+
+      // 初始化图表基础配置
+      const optionTemplate = {
+        backgroundColor: "transparent",
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: "rgba(16, 20, 30, 0.95)",
+          borderWidth: 0,
+          textStyle: { color: "#fff", fontSize: 13 },
+          axisPointer: {
+            type: "cross",
+            lineStyle: { color: "rgba(255,255,255,0.2)" },
+          },
+          formatter: function (params) {
+            // 获取第一个点的日期（所有点坐标轴一致）
+            const date = new Date(params[0].value[0]);
+            const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
+                          date.getMinutes().toString().padStart(2, '0') + ':' + 
+                          date.getSeconds().toString().padStart(2, '0');
+            
+            let res = `<div style="color: #888; font-size: 11px; margin-bottom: 6px;">${timeStr}</div>`;
+            params.forEach((item) => {
+              res += `<div style="margin-bottom: 2px;">
+                        <span style="color:${item.color}; font-weight:bold;">${item.value[1]}°C</span> 
+                        <span style="font-size:11px; color:#aaa; margin-left:10px;">${item.seriesName}</span>
+                      </div>`;
+            });
+            return res;
+          },
+        },
+        grid: {
+          left: "3%",
+          right: "4%",
+          bottom: "15%",
+          top: "5%",
+          containLabel: true,
+        },
+        xAxis: {
+          type: "category",
+          boundaryGap: false,
+          data: [],
+          axisLine: { lineStyle: { color: "#444" } },
+          axisLabel: { color: "#888" },
+        },
+        yAxis: {
+          type: "value",
+          axisLine: { show: false },
+          splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },
+          axisLabel: {
+            color: "#888",
+            formatter: "{value} °C",
+          },
+        },
+        dataZoom: [
+          {
+            type: "inside",
+            start: 0,
+            end: 100,
+          },
+          {
+            show: true,
+            type: "slider",
+            top: "90%",
+            start: 0,
+            end: 100,
+            backgroundColor: "rgba(255,255,255,0.02)",
+            fillerColor: "rgba(79, 172, 254, 0.2)",
+            borderColor: "transparent",
+            handleIcon:
+              "path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z",
+            handleSize: "80%",
+            textStyle: { color: "#888" },
+          },
+        ],
+        series: [
+          {
+            name: "DDR温度",
+            type: "line",
+            smooth: true,
+            symbol: "none",
+            lineStyle: {
+              width: 3,
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: "#4facfe" },
+                { offset: 1, color: "#00f2fe" },
+              ]),
+            },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: "rgba(0, 242, 254, 0.2)" },
+                { offset: 1, color: "rgba(0, 242, 254, 0)" },
+              ]),
+            },
+            data: [],
+          },
+        ],
+      };
+
+      myChart.setOption(optionTemplate);
+
+      // 文件读取逻辑
+      fileInput.addEventListener("change", function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        loading.style.display = "flex";
+        document.getElementById("fileInfo").innerText =
+          `正在处理: ${file.name}`;
+
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const content = event.target.result;
+          processData(content);
+        };
+        reader.readAsText(file);
+      });
+
+      function processData(text) {
+        // Updated regex to capture: [Timestamp], [SensorName], [Value]
+        const regex = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?thm log handler: \[(.*?)\] ([-+]?\d*\.?\d+) C/g;
+
+        const sensorDataMap = new Map();
+        let match;
+        let globalMaxV = -Infinity;
+        let globalMinV = Infinity;
+        let count = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+          const timeStr = match[1];
+          const sensorName = match[2];
+          const val = parseFloat(match[3]);
+
+          if (!sensorDataMap.has(sensorName)) {
+            sensorDataMap.set(sensorName, []);
+          }
+
+          // 使用时间对象以支持 'time' 轴
+          const dateObj = new Date(timeStr.replace(/-/g, "/"));
+          sensorDataMap.get(sensorName).push([dateObj, val]);
+
+          if (val > globalMaxV) globalMaxV = val;
+          if (val < globalMinV) globalMinV = val;
+          count++;
+        }
+
+        if (sensorDataMap.size === 0) {
+          alert("未能识别有效的温度数据（CM55 格式），请检查日志内容。");
+          loading.style.display = "none";
+          return;
+        }
+
+        // 准备系列和图例显隐逻辑
+        const series = [];
+        const selected = {};
+        const sensorNames = Array.from(sensorDataMap.keys());
+
+        sensorNames.forEach((name) => {
+          const data = sensorDataMap.get(name);
+          data.sort((a, b) => a[0] - b[0]); // 时间排序
+
+          // 默认仅展示 DDR 和 CPU 相关的传感器
+          const isDefaultVisible =
+            name.toUpperCase().includes("CPU") ||
+            name.toUpperCase().includes("DDR");
+          series.push({
+            name: name,
+            type: "line",
+            smooth: true,
+            symbol: "none",
+            emphasis: {
+              focus: "series",
+              lineStyle: { width: 4 },
+            },
+            data: data,
+          });
+          selected[name] = isDefaultVisible;
+        });
+
+        // 更新统计数据
+        document.getElementById("maxTemp").innerHTML =
+          `${globalMaxV.toFixed(2)}<span class="stat-unit">°C</span>`;
+        document.getElementById("minTemp").innerHTML =
+          `${globalMinV.toFixed(2)}<span class="stat-unit">°C</span>`;
+        document.getElementById("totalPoints").innerText = count;
+
+        // 更新图表配置
+        myChart.setOption(
+          {
+            legend: {
+              type: "scroll",
+              orient: "vertical",
+              left: 10,
+              top: 40,
+              bottom: 40,
+              data: sensorNames,
+              textStyle: { color: "#ccc", fontSize: 11 },
+              selected: selected,
+              pageTextStyle: { color: "#fff" },
+              inactiveColor: "#444",
+              itemGap: 12,
+              width: 180, // 限制图例宽度
+            },
+            grid: {
+              left: 230, // 留出足够空间给左侧垂直图例和 Y 轴标签
+              right: 80, // 增加右侧间距，确保最后一个时间标签不被挡住
+              bottom: 80, // 增加底部显示空间
+              top: 40,
+              containLabel: true,
+            },
+            xAxis: {
+              type: "time",
+              axisLine: { lineStyle: { color: "#444" } },
+              axisLabel: {
+                color: "#888",
+                hideOverlap: true,
+                margin: 15,
+              },
+              splitLine: { show: false },
+            },
+            dataZoom: [
+              {
+                type: "inside",
+                start: 0,
+                end: 100,
+              },
+              {
+                show: true,
+                type: "slider",
+                bottom: 10, // 将缩放轴移到底部边缘
+                height: 20,
+                backgroundColor: "rgba(255,255,255,0.02)",
+                fillerColor: "rgba(79, 172, 254, 0.2)",
+                borderColor: "transparent",
+                handleIcon:
+                  "path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z",
+                handleSize: "80%",
+                textStyle: { color: "#888" },
+              },
+            ],
+            series: series,
+          },
+          { replaceMerge: ["series"] },
+        );
+
+        loading.style.display = "none";
+        document.querySelector(".upload-zone").style.height = "80px";
+        document.querySelector(".upload-zone p").innerHTML =
+          "点击此处更换文件 <b>(已加载 " +
+          sensorDataMap.size +
+          " 个传感器)</b>";
+      }
+
+      // 响应式调整
+      window.addEventListener("resize", () => {
+        myChart.resize();
+      });
+
+      // 拖拽上传支持
+      const dropZone = document.getElementById("dropZone");
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "#00f2fe";
+      });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.style.borderColor = "rgba(255,255,255,0.1)";
+      });
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          fileInput.files = dataTransfer.files;
+          fileInput.dispatchEvent(new Event("change"));
+        }
+      });
+    </script>
+  </body>
+</html>
