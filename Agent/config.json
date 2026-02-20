@@ -1,0 +1,4 @@
+{
+    "BACKEND_URL": "http://120.24.88.39:8020/api/report",
+    "SCAN_INTERVAL": 30
+}
