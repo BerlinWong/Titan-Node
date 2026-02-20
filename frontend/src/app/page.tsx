@@ -352,8 +352,9 @@ export default function Dashboard() {
         <header className="mb-16">
           <div className="flex items-center gap-4 mb-8">
             <div className="h-px bg-zinc-800 flex-grow" />
-            <div className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+            <div className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center gap-4">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Node Matrix v2.4</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-600 border-l border-zinc-800 pl-4">Build: 20260221_0140</span>
             </div>
             <div className="h-px bg-zinc-800 flex-grow" />
           </div>

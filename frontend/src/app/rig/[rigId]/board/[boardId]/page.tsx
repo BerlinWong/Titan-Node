@@ -87,10 +87,12 @@ const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name:
     const sensorDataMap = new Map();
     
     dataPoints.forEach(pt => {
+        if (!pt || !pt.name) return;
         if (!sensorDataMap.has(pt.name)) {
             sensorDataMap.set(pt.name, []);
         }
-        sensorDataMap.get(pt.name).push([pt.ts, pt.val]);
+        const arr = sensorDataMap.get(pt.name);
+        if (arr) arr.push([pt.ts, pt.val]);
     });
 
     const series: any[] = [];
@@ -224,16 +226,16 @@ export default function BoardDetailPage() {
   if (!board) return <div className="min-h-screen bg-black flex items-center justify-center text-rose-500 font-mono font-bold tracking-tighter text-2xl uppercase">Critical Error: Board Not Found</div>;
 
   return (
-    <div className="h-screen bg-[#050505] text-zinc-100 p-8 font-sans selection:bg-emerald-500/30 flex flex-col overflow-hidden">
-      <header className="max-w-[1500px] w-full mx-auto mb-8 flex justify-between items-end flex-shrink-0">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 p-4 md:p-8 font-sans selection:bg-emerald-500/30 flex flex-col lg:h-screen lg:overflow-hidden">
+      <header className="max-w-[1500px] w-full mx-auto mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-start md:items-end flex-shrink-0 gap-4">
         <div>
            <a href="/" className="group flex items-center gap-2 text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em] hover:text-emerald-500 transition-all">
              <span className="group-hover:-translate-x-1 transition-transform">←</span> Command Center
            </a>
-           <h1 className="text-5xl font-black mt-4 uppercase italic tracking-tighter leading-none">
+           <h1 className="text-3xl md:text-5xl font-black mt-4 uppercase italic tracking-tighter leading-none">
              Board Detail: <span className="text-emerald-500">{board.board_id}</span>
            </h1>
-           <p className="text-[10px] text-zinc-600 font-bold mt-2 tracking-widest uppercase">Associated with Rig: {rig.rig_id}</p>
+           <p className="text-[10px] text-zinc-600 font-bold mt-2 tracking-widest uppercase">Associated with Rig: {rig.rig_id} | Build: 20260221_0140</p>
         </div>
         <div className="text-right pb-1">
            <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black mb-1 opacity-50">Local Precision Clocks (CST)</div>
@@ -242,8 +244,8 @@ export default function BoardDetailPage() {
       </header>
 
       <main className="max-w-[1500px] w-full mx-auto flex-1 flex flex-col min-h-0">
-        <div className="bg-[#0a0a0b] border border-zinc-800/50 rounded-3xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-0">
-          <div className="grid grid-cols-1 lg:grid-cols-5 h-full flex-1">
+        <div className="bg-[#0a0a0b] border border-zinc-800/50 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-5 h-full flex-1 min-h-0">
             {/* Sidebar */}
             <div className="p-8 border-b lg:border-b-0 lg:border-r border-zinc-800/50 bg-zinc-900/40 overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-start mb-8">
@@ -330,8 +332,8 @@ export default function BoardDetailPage() {
                   </div>
                )}
 
-               <div className="flex-1 bg-[#020202] border border-zinc-800/80 rounded-2xl p-6 overflow-hidden relative shadow-inner flex flex-col min-h-0">
-                  <div className="flex-1 min-h-0">
+                <div className="flex-1 bg-[#020202] border border-zinc-800/80 rounded-2xl p-4 md:p-6 overflow-hidden relative shadow-inner flex flex-col min-h-[350px] md:min-h-0">
+                  <div className="flex-1 min-h-0 h-[300px] md:h-full">
                      {board.temp_points && board.temp_points.length > 0 ? (
                        <TemperatureChart dataPoints={board.temp_points} />
                      ) : (
