@@ -190,7 +190,7 @@ export default function TemperaturePage() {
   };
 
   return (
-    <div className="p-8 space-y-8 bg-[#050505] min-h-screen text-zinc-100">
+    <div className="p-6 lg:p-12 space-y-8 bg-[#050505] min-h-screen text-zinc-100">
       <header className="flex justify-between items-center">
         <div>
           <h2 className="text-zinc-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Diagnostic Tools</h2>

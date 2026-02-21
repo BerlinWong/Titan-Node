@@ -1,4 +1,4 @@
 {
-    "BACKEND_URL": "http://120.24.88.39:8020/api/report",
+    "BACKEND_URL": "https://titan-backend.080977.xyz/api/report",
     "SCAN_INTERVAL": 30
 }

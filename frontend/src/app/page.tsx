@@ -350,7 +350,7 @@ export default function Dashboard() {
 
   return (
     <div className="bg-transparent text-zinc-100 font-sans selection:bg-emerald-500/30">
-      <main className="max-w-7xl mx-auto p-12 relative z-10">
+      <main className="max-w-7xl mx-auto p-6 lg:p-12 relative z-10">
         <header className="mb-16">
           <div className="flex items-center gap-4 mb-8">
             <div className="h-px bg-zinc-800 flex-grow" />

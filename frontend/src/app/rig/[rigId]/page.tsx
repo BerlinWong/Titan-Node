@@ -98,8 +98,8 @@ export default function RigDetailPage() {
   if (!rig) return <div className="min-h-screen bg-black flex items-center justify-center text-rose-500 font-mono font-bold tracking-tighter text-2xl uppercase">Critical Error: Node Not Found</div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 p-8 font-sans selection:bg-emerald-500/30">
-      <header className="max-w-7xl mx-auto mb-12 flex justify-between items-end">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 p-6 lg:p-12 font-sans selection:bg-emerald-500/30">
+      <header className="max-w-7xl mx-auto mb-8 lg:mb-16 flex justify-between items-end">
         <div>
            <a href="/" className="group flex items-center gap-2 text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em] hover:text-emerald-500 transition-all">
              <span className="group-hover:-translate-x-1 transition-transform">←</span> Return to Command Center
