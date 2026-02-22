@@ -184,6 +184,7 @@ const RigCard = ({ rig }: { rig: Rig }) => {
     }
   };
 
+  
   return (
     <div 
       onMouseEnter={() => setIsHovered(true)}
