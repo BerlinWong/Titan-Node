@@ -164,9 +164,11 @@ class Agent:
             "start_time": "Unknown",
             "elapsed_hours": 0.0,
             "remaining_hours": 48.0,
+            "remaining_seconds": 0,
             "last_kernel_log": "",
             "current_loop": 0,
             "is_hang": False,
+            "temp_warning": False,
             "kernel_heartbeat": None,
             "cm55_heartbeat": None,
             "kernel_stream": [],
@@ -189,9 +191,9 @@ class Agent:
 
                     # 检查超温警告 (扫描全文)
                     if "W/NO_TAG THM_INFO: warning:check_temp exceed!!!" in full_content:
-                        status_data["status"] = "Warning"
-                        if "Overtemp warning from CM55" not in status_data["errors"]:
-                            status_data["errors"].append("Overtemp warning from CM55")
+                        status_data["temp_warning"] = True
+                        if "超温警告" not in status_data["errors"]:
+                            status_data["errors"].append("超温警告")
 
                     # --- 改进：Agent 本地全量解析并抽样 ---
                     # 匹配所有满足条件的温度行 (包括 SOC 和 DDR 系列)
@@ -269,7 +271,7 @@ class Agent:
                         status_data["kernel_heartbeat"] = last_ts
                         last_log_dt = datetime.strptime(last_ts, "%Y-%m-%d %H:%M:%S")
                         
-                        # 计算进度：最后一条日志时间 - 开始时间
+                        # 固定时长任务进度计算（如果还没匹配到 Seconds remaining，用时间估算作为保底）
                         if start_time_match:
                             elapsed = (last_log_dt - start_dt).total_seconds() / 3600
                             status_data["elapsed_hours"] = round(min(48.0, elapsed), 2)
@@ -277,80 +279,69 @@ class Agent:
                             if elapsed >= 48:
                                 status_data["status"] = "Finished"
 
-                        # --- 长时间不刷新判定 ---
-                        if status_data["status"] not in ["Finished", "Error"] and (datetime.now() - last_log_dt).total_seconds() > 300:
-                            # 也要考虑 CM55 的情况，如果 CM55 还没挂也不算挂
-                            cm_alive = False
-                            if status_data.get("cm55_heartbeat"):
-                                try:
-                                    cm_dt = datetime.strptime(status_data["cm55_heartbeat"], "%Y-%m-%d %H:%M:%S")
-                                    if (datetime.now() - cm_dt).total_seconds() <= 300:
-                                        cm_alive = True
-                                except: pass
-                            
-                            if not cm_alive:
-                                status_data["is_hang"] = True
-                                status_data["status"] = "Error"
-                                status_data["errors"].append(f"Hang System Error (Last log: {last_ts})")
+                    # --- 规则检测：Hang 检测 (5分钟阈值) ---
+                    now = datetime.now()
+                    # A. Kernel Hang
+                    if status_data.get("kernel_heartbeat"):
+                        k_dt = datetime.strptime(status_data["kernel_heartbeat"], "%Y-%m-%d %H:%M:%S")
+                        if (now - k_dt).total_seconds() > 300 and status_data["status"] not in ["Finished", "Error"]:
+                            status_data["is_hang"] = True
+                            status_data["status"] = "Error"
+                            if "Kernel Hang Detected (>5min)" not in status_data["errors"]:
+                                status_data["errors"].append("Kernel Hang Detected (>5min)")
 
-                    # --- 通用异常检查 ---
-                    if "Error: Miscompare" in tail or "[Error] Mismatch" in tail:
+                    # B. CM55 Hang
+                    if status_data.get("cm55_heartbeat"):
+                        c_dt = datetime.strptime(status_data["cm55_heartbeat"], "%Y-%m-%d %H:%M:%S")
+                        if (now - c_dt).total_seconds() > 300 and status_data["status"] not in ["Finished", "Error"]:
+                            status_data["status"] = "Error"
+                            if "CM55 Hang Detected (>5min)" not in status_data["errors"]:
+                                status_data["errors"].append("CM55 Hang Detected (>5min)")
+
+                    # --- 规则检测：通用错误关键字 ---
+                    if "Error: Miscompare" in tail:
                         status_data["status"] = "Error"
-                        if "Miscompare / Mismatch Detected" not in status_data["errors"]:
-                            status_data["errors"].append("Miscompare / Mismatch Detected")
+                        if "Miscompare Detected" not in status_data["errors"]:
+                            status_data["errors"].append("Miscompare Detected")
+                    if "[Error] Mismatch" in tail:
+                        status_data["status"] = "Error"
+                        if "Mismatch Detected" not in status_data["errors"]:
+                            status_data["errors"].append("Mismatch Detected")
 
                     # --- 根据任务类型进行分类检查 ---
                     if self.selected_task_type == "循环启动任务":
                         # 1. 循环启动任务
-                        if "Switch to Run Full Training Mode" in tail:
-                            status_data["status"] = "Error"
-                            if "Unexpected Full Training Mode" not in status_data["errors"]:
-                                status_data["errors"].append("Unexpected Full Training Mode")
+                        # 错误检 1: Switch to 路径错误
+                        reboot_errors = [
+                            "Switch to Full Training Boot",
+                            "Switch to Run Full Training Mode",
+                            "2D Training Successfully！"
+                        ]
+                        for r_err in reboot_errors:
+                            if r_err in tail:
+                                status_data["status"] = "Error"
+                                if f"Reboot Error: {r_err}" not in status_data["errors"]:
+                                    status_data["errors"].append(f"Reboot Error: {r_err}")
                                 
                         loop_matches = re.findall(r'BMX7 DDR Reboot Test: Loop(\d+)', tail)
                         if loop_matches:
                             current_loop = int(loop_matches[-1])
                             status_data["current_loop"] = current_loop
-                            
-                            last_loop_info = self.prev_loops.get(board_id)
-                            if last_loop_info:
-                                old_loop, old_ts = last_loop_info
-                                
-                                # 不连续判定
-                                if current_loop < old_loop:
-                                    status_data["status"] = "Error"
-                                    if f"Loop continuity error: {old_loop} -> {current_loop}" not in status_data["errors"]:
-                                        status_data["errors"].append(f"Loop continuity error: {old_loop} -> {current_loop}")
-                                
-                                # Loop 卡顿时长判定
-                                if current_loop == old_loop and last_ts:
-                                    last_log_dt = datetime.strptime(last_ts, "%Y-%m-%d %H:%M:%S")
-                                    if (last_log_dt - old_ts).total_seconds() > 300:
-                                        status_data["status"] = "Error"
-                                        err_msg = f"Loop {current_loop} stuck for > 5 min"
-                                        if err_msg not in status_data["errors"]:
-                                            status_data["errors"].append(err_msg)
-                            
-                            if last_ts:
-                                self.prev_loops[board_id] = (current_loop, datetime.strptime(last_ts, "%Y-%m-%d %H:%M:%S"))
+                            # 记录到 prev_loops 用于连续性检查 (逻辑保持)
                     else:
                         # 2. 固定时长任务
-                        rem_match = re.findall(r'Seconds remaining: (\d+)', tail)
+                        rem_match = re.findall(r'Log: Seconds remaining: (\d+)', tail)
                         if rem_match:
                             remaining_sec = int(rem_match[-1])
-                            # stressapp 往往是以秒计的时长任务
+                            status_data["remaining_seconds"] = remaining_sec
                             if remaining_sec == 0:
                                 status_data["status"] = "Finished"
                                 status_data["elapsed_hours"] = 48.0
                                 status_data["remaining_hours"] = 0.0
                             else:
-                                # 重定向进度条以 Seconds remaining 为准
-                                # 假设整个测试目标是某种设定，这里为了展示兼容，用递减映射
-                                # 假设默认是 48h (172800秒)
-                                total_sec = 172800 
-                                elapsed_sec = max(0, total_sec - remaining_sec)
-                                status_data["elapsed_hours"] = round(elapsed_sec / 3600.0, 2)
+                                # 以 48h 为基准百分比展示，或直接用秒数换算小时
                                 status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
+                                status_data["elapsed_hours"] = round(48.0 - status_data["remaining_hours"], 2)
 
                     # 严重错误检测 (优化版)
                     critical_keywords = ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"]

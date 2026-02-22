@@ -20,7 +20,11 @@ interface BoardStatus {
   kernel_heartbeat?: string;
   cm55_heartbeat?: string;
   resurrection_gap?: string;
+  temp_warning?: boolean;
+  remaining_seconds?: number;
+  errors: string[];
   kernel_stream?: string[];
+  ddr_details?: Record<string, number>;
   temp_points?: Array<{ts: number, name: string, val: number}>;
 }
 
@@ -258,7 +262,14 @@ const RigCard = ({ rig }: { rig: Rig }) => {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black italic text-emerald-500 tracking-tighter">{board.board_id}</span>
-                  <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900/50 px-1.5 rounded">{board.elapsed_hours}h</span>
+                  <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900/50 px-1.5 rounded">
+                    {board.task_type === "循环启动任务" ? `Loop ${board.current_loop}` : `${board.elapsed_hours}h`}
+                  </span>
+                  {board.task_type === "固定时长任务" && (board.remaining_seconds ?? 0) > 0 && (
+                    <span className="text-[9px] font-bold text-zinc-600">
+                       ({board.remaining_seconds}s rem)
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <a 
@@ -276,10 +287,10 @@ const RigCard = ({ rig }: { rig: Rig }) => {
                     <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} logStream={board.kernel_stream} />
                     <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
                   </div>
-                  <div className="flex gap-2 text-[9px] font-bold uppercase tracking-tighter shrink-0">
-                     <span className="text-rose-400/90">Min: {board.temp_min?.toFixed(0) || 0}°</span>
-                     <span className="text-amber-400/90">Max: {board.temp_max?.toFixed(0) || 0}°</span>
-                     <span className="text-sky-400/90">DDR: {board.temp_ddr?.toFixed(0) || 0}°</span>
+                  <div className={`flex gap-2 text-[9px] font-bold uppercase tracking-tighter shrink-0 px-1.5 py-0.5 rounded transition-colors ${board.temp_warning ? 'bg-amber-500/20 ring-1 ring-amber-500/50' : ''}`}>
+                     <span className={board.temp_warning ? 'text-amber-400' : 'text-rose-400/90'}>Min: {board.temp_min?.toFixed(0) || 0}°</span>
+                     <span className={board.temp_warning ? 'text-amber-300' : 'text-amber-400/90'}>Max: {board.temp_max?.toFixed(0) || 0}°</span>
+                     <span className={board.temp_warning ? 'text-amber-400' : 'text-sky-400/90'}>DDR: {board.temp_ddr?.toFixed(0) || 0}°</span>
                   </div>
               </div>
 

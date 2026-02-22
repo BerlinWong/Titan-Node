@@ -20,6 +20,8 @@ class BoardStatus(BaseModel):
     task_type: Optional[str] = None
     current_loop: int = 0
     is_hang: bool = False
+    temp_warning: bool = False
+    remaining_seconds: int = 0
     errors: List[str] = []
     kernel_stream: List[str] = []
     ddr_details: dict = {}

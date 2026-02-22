@@ -180,6 +180,8 @@ interface BoardStatus {
   last_kernel_log: string;
   current_loop?: number;
   is_hang?: boolean;
+  temp_warning?: boolean;
+  remaining_seconds?: number;
   kernel_heartbeat?: string;
   cm55_heartbeat?: string;
   resurrection_gap?: string;
@@ -371,15 +373,19 @@ export default function BoardDetailPage() {
 
                       <div className="pt-8 border-t border-zinc-800/50">
                         <div className="flex justify-between items-end mb-4">
-                           <span className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">Progress</span>
+                           <span className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">
+                             {board.task_type === "循环启动任务" ? `Current Loop: ${board.current_loop}` : (board.remaining_seconds ? 'Remaining' : 'Progress')}
+                           </span>
                            <span className="text-2xl font-black text-emerald-500 tracking-tighter tabular-nums leading-none">
-                             {Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}<span className="text-xs ml-0.5">%</span>
+                             {board.task_type === "循环启动任务" ? `#${board.current_loop}` : (board.remaining_seconds ? `${board.remaining_seconds}s` : `${Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}%`)}
                            </span>
                         </div>
                         <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5 p-1">
                           <div 
-                            className="h-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-300 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all duration-1000"
-                            style={{ width: `${Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
+                            className={`h-full rounded-full transition-all duration-1000 ${
+                              board.temp_warning ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                            }`}
+                            style={{ width: `${board.task_type === "循环启动任务" ? 100 : Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
                           />
                         </div>
                       </div>
@@ -398,16 +404,16 @@ export default function BoardDetailPage() {
                      <div className="w-1.5 h-10 bg-gradient-to-b from-emerald-500 to-emerald-800 rounded-full" />
                      <div className="flex flex-col">
                         <p className="text-[10px] text-zinc-500 uppercase font-black tracking-[0.2em] mb-1">SoC Thermals (Min/Max)</p>
-                        <div className="flex items-end gap-3">
-                           <p className="text-3xl md:text-4xl font-black text-zinc-100 tabular-nums tracking-tighter leading-none">
-                             <span className="text-emerald-400">{board.temp_min?.toFixed(0)}</span>
-                             <span className="mx-2 text-zinc-800 font-light">/</span>
-                             <span className={`${board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500'}`}>
-                               {board.temp_max?.toFixed(0)}
-                             </span>
-                           </p>
-                           <span className="text-sm font-black text-zinc-600 mb-1">°C</span>
-                        </div>
+                         <div className="flex items-end gap-3">
+                            <p className="text-3xl md:text-4xl font-black text-zinc-100 tabular-nums tracking-tighter leading-none">
+                               <span className={board.temp_warning ? 'text-amber-400' : 'text-emerald-400'}>{board.temp_min?.toFixed(0)}</span>
+                               <span className="mx-2 text-zinc-800 font-light">/</span>
+                               <span className={board.temp_warning ? 'text-amber-500 animate-pulse' : (board.status === 'Warning' ? 'text-amber-400' : 'text-rose-500')}>
+                                 {board.temp_max?.toFixed(0)}
+                               </span>
+                            </p>
+                            <span className={`text-sm font-black mb-1 ${board.temp_warning ? 'text-amber-500' : 'text-zinc-600'}`}>°C</span>
+                         </div>
                      </div>
                   </div>
 
