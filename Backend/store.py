@@ -24,12 +24,20 @@ def save_to_disk():
         serializable_data = {}
         for rid, report in data_store.items():
             report_dict = report.dict()
-            if report_dict.get("last_report_at"):
-                report_dict["last_report_at"] = report_dict["last_report_at"].isoformat()
+            # 处理datetime对象的序列化
+            if hasattr(report, 'last_report_at') and report.last_report_at:
+                report_dict["last_report_at"] = report.last_report_at.isoformat()
+            # 处理boards列表中的datetime对象
+            if "boards" in report_dict and report_dict["boards"]:
+                for board in report_dict["boards"]:
+                    if hasattr(board, 'kernel_heartbeat') and board.kernel_heartbeat:
+                        board.kernel_heartbeat = board.kernel_heartbeat.isoformat()
+                    if hasattr(board, 'cm55_heartbeat') and board.cm55_heartbeat:
+                        board.cm55_heartbeat = board.cm55_heartbeat.isoformat()
             serializable_data[rid] = report_dict
             
         with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(serializable_data, f, ensure_ascii=False, indent=4)
+            json.dump(serializable_data, f, ensure_ascii=False, indent=4, default=str)
     except Exception as e:
         print(f"Failed to save state: {e}")
 
@@ -100,12 +108,13 @@ def save_rules_to_disk():
         serializable_rules = {}
         for task_type, rule in rules_store.items():
             rule_dict = rule.dict()
-            if rule_dict.get("last_updated"):
-                rule_dict["last_updated"] = rule_dict["last_updated"].isoformat()
+            # 处理datetime对象的序列化
+            if hasattr(rule, 'last_updated') and rule.last_updated:
+                rule_dict["last_updated"] = rule.last_updated.isoformat()
             serializable_rules[task_type] = rule_dict
             
         with open(RULES_FILE, "w", encoding="utf-8") as f:
-            json.dump(serializable_rules, f, ensure_ascii=False, indent=4)
+            json.dump(serializable_rules, f, ensure_ascii=False, indent=4, default=str)
     except Exception as e:
         print(f"Failed to save rules: {e}")
 

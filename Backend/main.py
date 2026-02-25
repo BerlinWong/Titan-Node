@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 import store
 import models
 import urllib.parse
+from models import RigReport, RuleConfig
 
 app = FastAPI(title="Rig Monitoring System API")
 
