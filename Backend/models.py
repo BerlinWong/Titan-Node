@@ -23,9 +23,10 @@ class BoardStatus(BaseModel):
     temp_warning: bool = False
     remaining_seconds: int = 0
     errors: List[str] = []
-    kernel_stream: List[str] = []
+    # 移除大量数据字段以减少上传量
+    # kernel_stream: List[str] = []
     ddr_details: dict = {}
-    temp_points: List[dict] = []
+    # temp_points: List[dict] = []
     last_updated: datetime = Field(default_factory=datetime.now)
 
 class RuleConfig(BaseModel):

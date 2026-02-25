@@ -327,13 +327,8 @@ class Agent:
                                   next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), 0.0))
                         status_data["temp_ddr"] = ddr_val
 
-                    # --- 智能抽样：如果数据点太多（例如超过500点），进行等间隔抽样 ---
-                    MAX_POINTS = 500
-                    if len(raw_points) > MAX_POINTS:
-                        step = len(raw_points) // MAX_POINTS
-                        status_data["temp_points"] = raw_points[::step]
-                    else:
-                        status_data["temp_points"] = raw_points
+                    # 移除温度历史数据，大幅减少上传量
+                    # status_data["temp_points"] = []
 
             except Exception as e:
                 print(f"[❌ {board_id}] CM55 全量解析失败: {e}")
@@ -394,8 +389,8 @@ class Agent:
                     tail = f.read()
                     lines = tail.splitlines()
                     status_data["last_kernel_log"] = lines[-1] if lines else ""
-                    # 抓取最后 100 行作为流数据
-                    status_data["kernel_stream"] = lines[-100:] if len(lines) > 100 else lines
+                    # 移除kernel_stream上传以减少数据量
+                    # status_data["kernel_stream"] = lines[-100:] if len(lines) > 100 else lines
 
                     # --- Hang & Heartbeat 检测 ---
                     ts_matches = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', tail)
