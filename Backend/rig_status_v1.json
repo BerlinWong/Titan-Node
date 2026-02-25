@@ -1,16 +1,16 @@
 {
-    "COB12": {
-        "rig_id": "COB12",
+    "localtest-mismatch": {
+        "rig_id": "localtest-mismatch",
         "boards": [
             {
-                "board_id": "0108",
-                "status": "Finished",
-                "start_time": "2026-01-21 15:33:17",
-                "elapsed_hours": 48.0,
-                "remaining_hours": 0.0,
-                "temperature": 103.27,
-                "temp_min": 103.27,
-                "temp_max": 113.57,
-                "temp_ddr": 103.27,
+                "board_id": "090",
+                "status": "Error",
+                "start_time": "2026-02-13 16:38:28",
+                "elapsed_hours": 17.69,
+                "remaining_hours": 30.31,
+                "temperature": -27.43,
+                "temp_min": -27.43,
+                "temp_max": 116.87,
+                "temp_ddr": 49.04,
                 "voltage": 0.0,
                 "kernel_heartbeat": 

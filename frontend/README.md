@@ -1,36 +1,197 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Titan Node Frontend
 
-## Getting Started
+## 🎯 项目概述
 
-First, run the development server:
+Titan Node 前端基于 Next.js 14 构建，提供实时台架监控仪表盘，支持动态规则配置和历史错误检测。
 
+## 🚀 快速开始
+
+### 1. 安装依赖
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. 启动开发服务器
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. 访问应用
+打开浏览器访问：http://localhost:3000
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+## 🎨 功能特性
 
-## Learn More
+### 实时监控
+- **多台架视图**：网格布局显示所有台架状态
+- **板子状态卡片**：独立显示每个板子的详细状态
+- **进度条可视化**：直观显示任务进度
+- **状态呼吸灯**：Error 状态红色闪烁警告
+- **实时数据流**：显示最新日志流
 
-To learn more about Next.js, take a look at the following resources:
+### 错误检测与显示
+- **错误状态识别**：自动识别并高亮显示错误状态
+- **悬浮错误详情**：鼠标悬停板子ID显示具体错误信息
+- **错误列表展示**：详细显示所有检测到的错误类型
+- **状态优先级**：Error > Finished > Running > Warning
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 循环任务支持
+- **循环次数显示**：格式为 `Loop 5/12`（当前/总数）
+- **进度计算**：基于循环次数和总目标计算百分比
+- **时间估算**：动态计算开始时间和预计完成时间
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+### 温度监控
+- **多传感器支持**：SoC、DDR、NPU 等温度点
+- **历史极值**：显示整个测试过程的温度极值
+- **超温警告**：温度超限时橙色高亮显示
+- **温度曲线**：实时温度数据可视化
 
-## Deploy on Vercel
+## 🔧 技术栈
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **框架**：Next.js 14 + React 18
+- **样式**：TailwindCSS + shadcn/ui
+- **图标**：Lucide React
+- **类型检查**：TypeScript
+- **状态管理**：React Hooks
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## 📱 响应式设计
+
+- **桌面端**：优化的网格布局
+- **移动端**：自适应卡片布局
+- **平板端**：中等屏幕优化
+- **交互反馈**：hover 状态和过渡动画
+
+## 🎨 UI 组件
+
+### RigCard 组件
+- **台架概览**：显示台架整体状态
+- **统计面板**：成功率、延迟、板子数量
+- **进度指示**：ETD 和开始时间显示
+- **快速导航**：跳转到详细页面链接
+
+### BoardCard 组件
+- **板子状态**：ID、温度、进度显示
+- **错误悬浮**：鼠标悬停显示错误详情
+- **心跳指示**：Kernel 和 CM55 心跳状态
+- **日志流预览**：最新日志内容展示
+
+### StatusIndicator 组件
+- **状态颜色**：不同状态对应不同颜色
+- **动画效果**：Error 状态呼吸灯效果
+- **文字标签**：状态文字标识
+
+## 🔄 数据流
+
+### 数据获取
+```typescript
+// 定期获取台架状态数据
+const fetchRigStatus = async () => {
+  const response = await fetch('/api/status');
+  const rigs = await response.json();
+  setRigs(rigs);
+};
+```
+
+### 状态更新
+- **自动刷新**：每 5 秒自动更新数据
+- **错误处理**：网络异常时的降级显示
+- **加载状态**：数据获取时的 loading 指示
+
+## 🎯 配置说明
+
+### 环境变量
+```bash
+# 后端 API 地址
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# 开发模式
+NODE_ENV=development
+```
+
+### 构建配置
+```json
+// next.config.js
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "es6"]
+  }
+}
+```
+
+## 🐛 故障排除
+
+### 常见问题
+
+1. **无法连接后端**
+   ```bash
+   # 检查后端服务状态
+   curl http://localhost:8000/api/status
+   
+   # 检查网络配置
+   ping localhost
+   ```
+
+2. **数据不更新**
+   ```bash
+   # 检查浏览器控制台错误
+   # 验证 API 响应格式
+   # 检查网络延迟
+   ```
+
+3. **样式显示异常**
+   ```bash
+   # 清除浏览器缓存
+   # 检查 TailwindCSS 构建
+   # 验证响应式布局
+   ```
+
+## 📊 性能优化
+
+- **代码分割**：按路由自动分割代码
+- **图片优化**：Next.js 自动图片优化
+- **缓存策略**：合理的 SWR 缓存配置
+- **懒加载**：组件和数据的按需加载
+
+## 🚀 部署
+
+### 生产构建
+```bash
+npm run build
+```
+
+### 生产启动
+```bash
+npm start
+```
+
+### Docker 部署
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+## 📝 开发指南
+
+### 添加新功能
+1. 在 `src/app/page.tsx` 中添加新组件
+2. 使用 TailwindCSS 进行样式设计
+3. 遵循现有的代码结构和命名规范
+4. 添加 TypeScript 类型定义
+
+### 样式定制
+- 修改 `tailwind.config.js` 配置主题
+- 使用 CSS 变量进行颜色定制
+- 遵循设计系统的一致性原则
+
+## 📞 技术支持
+
+- **Next.js 文档**：https://nextjs.org/docs
+- **TailwindCSS**：https://tailwindcss.com/docs
+- **shadcn/ui**：https://ui.shadcn.com
+- **Lucide 图标**：https://lucide.dev

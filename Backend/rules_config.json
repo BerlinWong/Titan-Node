@@ -2,15 +2,23 @@
     "循环启动任务": {
         "task_type": "循环启动任务",
         "rules": {
-            "time_calculation": {
-                "method": "reboot_script",
-                "script_pattern": "\\[(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\].*bmx7_ddr_setup_reboot\\.sh",
-                "total_hours": 48
-            },
-            "loop_detection": {
-                "pattern": "BMX7 DDR Reboot Test: Loop(\\d+)"
-            },
             "error_patterns": [
+                {
+                    "name": "Miscompare Detected",
+                    "pattern": "Error: miscompare"
+                },
+                {
+                    "name": "Hardware Miscompare",
+                    "pattern": "Hardware Error: miscompare"
+                },
+                {
+                    "name": "Hardware MISMATCH",
+                    "pattern": "Error: MISMATCH"
+                },
+                {
+                    "name": "Report Miscompare",
+                    "pattern": "Report Error: miscompare"
+                },
                 {
                     "name": "Reboot Error",
                     "pattern": "Switch to Full Training Boot"
@@ -24,68 +32,40 @@
                     "pattern": "2D Training Successfully！"
                 },
                 {
-                    "name": "Miscompare Detected",
-                    "pattern": "Error: Miscompare"
-                },
-                {
                     "name": "Mismatch Detected",
                     "pattern": "[Error] Mismatch"
                 }
             ],
-            "script_error_patterns": [
-                "Permission denied",
-                "No such file or directory",
-                "Command not found",
-                "Error executing"
-            ],
-            "critical_keywords": [
-                "KERNEL PANIC",
-                "MACHINE CHECK",
-                "REBOOTING",
-                "OUT OF MEMORY",
-                "SEGMENTATION FAULT"
-            ],
-            "hang_detection": {
-                "threshold_seconds": 300,
-                "check_kernel": true,
-                "check_cm55": true
+            "loop_detection": {
+                "pattern": "BMX7 DDR Reboot Test: Loop(\\d+)"
             }
         },
-        "version": "1.0",
-        "last_updated": "2026-02-25T18:40:42.827676"
+        "version": "1.3",
+        "last_updated": "2026-02-25T20:00:45.468327"
     },
     "固定时长任务": {
         "task_type": "固定时长任务",
         "rules": {
-            "time_calculation": {
-                "method": "remaining_seconds",
-                "pattern": "Log: Seconds remaining: (\\d+)",
-                "total_hours": 48
-            },
             "error_patterns": [
                 {
                     "name": "Miscompare Detected",
-                    "pattern": "Error: Miscompare"
+                    "pattern": "Error: miscompare"
+                },
+                {
+                    "name": "Hardware Miscompare",
+                    "pattern": "Hardware Error: miscompare"
+                },
+                {
+                    "name": "Report Miscompare",
+                    "pattern": "Report Error: miscompare"
                 },
                 {
                     "name": "Mismatch Detected",
                     "pattern": "[Error] Mismatch"
                 }
-            ],
-            "critical_keywords": [
-                "KERNEL PANIC",
-                "MACHINE CHECK",
-                "REBOOTING",
-                "OUT OF MEMORY",
-                "SEGMENTATION FAULT"
-            ],
-            "hang_detection": {
-                "threshold_seconds": 300,
-                "check_kernel": true,
-                "check_cm55": true
-            }
+            ]
         },
-        "version": "1.0",
-        "last_updated": "2026-02-25T18:40:42.827689"
+        "version": "1.1",
+        "last_updated": "2026-02-25T19:12:55.355798"
     }
 }

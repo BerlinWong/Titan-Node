@@ -118,12 +118,54 @@ D:\SIP_SAMSUNG_8GB\TEMP\
    - 48小时总时长监控
    - 自动完成状态检测
 
+### 动态规则配置
+
+Agent 支持从后端动态获取规则配置，无需重新部署即可更新检测逻辑：
+
+#### 规则获取机制
+- **启动时获取**：Agent 启动时立即从后端获取最新规则
+- **定期更新**：每 5 分钟自动检查规则更新
+- **失败后备**：网络异常时使用内置默认规则
+- **版本控制**：支持规则版本管理和增量更新
+
+#### 规则配置内容
+- **时间计算规则**：支持 reboot 脚本时间和 remaining seconds 两种模式
+- **错误模式检测**：可配置任意错误匹配模式
+- **循环检测规则**：可配置循环次数统计模式
+- **严重错误检测**：可配置严重错误关键词列表
+- **挂起检测规则**：可配置检测阈值和监控范围
+
+### 历史错误检测
+
+Agent 支持冷启动时全量历史日志扫描：
+
+#### 检测能力
+- **全量错误扫描**：启动时扫描完整日志历史
+- **循环次数统计**：基于全量日志获取最大循环次数
+- **错误状态保护**：历史错误状态不会被其他逻辑覆盖
+- **实时+历史**：结合历史检测和实时监控
+
+#### 检测输出
+```
+[🔍 090] 开始全量历史错误检测...
+[❌ 090] 历史日志中发现错误: Hardware MISMATCH
+[🔄 090] 检测到循环: 5/12
+```
+
 ### 错误检测
 
-- 通用错误：`Error: Miscompare`、`[Error] Mismatch`
-- 严重错误：`KERNEL PANIC`、`MACHINE CHECK`、`REBOOTING`
-- 挂起检测：超过5分钟无日志更新
-- 超温警告：`W/NO_TAG THM_INFO: warning:check_temp exceed!!!`
+#### 支持的错误类型
+- **Miscompare 错误**：`Error: miscompare`、`Hardware Error: miscompare`、`Report Error: miscompare`
+- **Mismatch 错误**：`[Error] Mismatch`、`Error: MISMATCH`
+- **重启错误**：`Switch to Full Training Boot`、`2D Training Successfully！`
+- **严重错误**：`KERNEL PANIC`、`MACHINE CHECK`、`REBOOTING`、`OUT OF MEMORY`、`SEGMENTATION FAULT`
+- **挂起检测**：超过 5 分钟无日志更新（可配置阈值）
+- **超温警告**：`W/NO_TAG THM_INFO: warning:check_temp exceed!!!`
+
+#### 状态优先级
+`Error` > `Finished` > `Running` > `Warning`
+
+错误状态具有最高优先级，不会被其他逻辑覆盖。
 
 ## 📊 数据上报
 

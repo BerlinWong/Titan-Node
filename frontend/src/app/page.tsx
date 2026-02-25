@@ -16,6 +16,7 @@ interface BoardStatus {
   start_time?: string;
   last_kernel_log?: string;
   current_loop?: number;
+  total_loops?: number;
   is_hang?: boolean;
   kernel_heartbeat?: string;
   cm55_heartbeat?: string;
@@ -270,9 +271,24 @@ const RigCard = ({ rig }: { rig: Rig }) => {
             <div key={board.board_id} className="group/item">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
+                  <div className="relative group">
                   <span className="text-sm font-black italic text-emerald-500 tracking-tighter">{board.board_id}</span>
+                  {board.status === 'Error' && board.errors && board.errors.length > 0 && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
+                      <div className="bg-rose-500/95 text-white text-[9px] px-2 py-1.5 rounded-lg shadow-lg border border-rose-400/30 min-w-[120px] max-w-[200px]">
+                        <p className="font-black mb-1 text-center">错误详情</p>
+                        <div className="space-y-0.5">
+                          {board.errors.map((error, idx) => (
+                            <p key={idx} className="truncate">• {error}</p>
+                          ))}
+                        </div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-rose-500/95"></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                   <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900/50 px-1.5 rounded">
-                    {board.task_type === "循环启动任务" ? `Loop ${board.current_loop}` : `${board.elapsed_hours}h`}
+                    {board.task_type === "循环启动任务" ? `Loop ${board.current_loop}/${board.total_loops || board.current_loop}` : `${board.elapsed_hours}h`}
                   </span>
                   {board.task_type === "固定时长任务" && (board.remaining_seconds ?? 0) > 0 && (
                     <span className="text-[9px] font-bold text-zinc-600">

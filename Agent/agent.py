@@ -232,6 +232,9 @@ class Agent:
             "status": "Running",
             "task_type": self.selected_task_type,
             "temperature": 0.0,
+            "temp_min": 0.0,
+            "temp_max": 0.0,
+            "temp_ddr": 0.0,
             "voltage": 0.0,
             "start_time": "Unknown",
             "elapsed_hours": 0.0,
@@ -239,6 +242,7 @@ class Agent:
             "remaining_seconds": 0,
             "last_kernel_log": "",
             "current_loop": 0,
+            "total_loops": 0,  # 新增总循环次数
             "is_hang": False,
             "temp_warning": False,
             "kernel_heartbeat": None,
@@ -256,16 +260,20 @@ class Agent:
                 with open(path, "r", encoding='utf-8', errors='ignore') as f:
                     full_content = f.read()
                     
-                    # 提取最新心跳时间
-                    cm_ts_match = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', full_content)
-                    if cm_ts_match:
-                        status_data["cm55_heartbeat"] = cm_ts_match[-1]
-
+                    # --- CM55 历史错误检测 ---
+                    print(f"[🔍 {board_id}] 开始CM55日志历史检测...")
+                    
                     # 检查超温警告 (扫描全文)
                     if "W/NO_TAG THM_INFO: warning:check_temp exceed!!!" in full_content:
                         status_data["temp_warning"] = True
                         if "超温警告" not in status_data["errors"]:
                             status_data["errors"].append("超温警告")
+                        print(f"[❌ {board_id}] CM55历史日志中发现超温警告")
+                    
+                    # 提取最新心跳时间
+                    cm_ts_match = re.findall(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', full_content)
+                    if cm_ts_match:
+                        status_data["cm55_heartbeat"] = cm_ts_match[-1]
 
                     # --- 改进：Agent 本地全量解析并抽样 ---
                     # 匹配所有满足条件的温度行 (包括 SOC 和 DDR 系列)
@@ -339,7 +347,45 @@ class Agent:
                         status_data["start_time"] = start_time_match.group(1).replace(".", "-")
                         start_dt = datetime.strptime(status_data["start_time"], "%Y-%m-%d %H:%M:%S")
 
-                    # 读取尾部内容进行深度分析
+                    # --- 全量历史错误检测（冷启动时重要）---
+                    print(f"[🔍 {board_id}] 开始全量历史错误检测...")
+                    f.seek(0)  # 回到文件开头
+                    full_kernel_content = f.read()
+                    
+                    # 获取当前规则进行历史检测
+                    rules = self.get_current_rules()
+                    if rules:
+                        # 检查所有错误模式
+                        error_patterns = rules.get("error_patterns", [])
+                        for error_rule in error_patterns:
+                            pattern = error_rule.get("pattern", "")
+                            name = error_rule.get("name", "Unknown Error")
+                            if pattern in full_kernel_content:
+                                status_data["status"] = "Error"
+                                if name not in status_data["errors"]:
+                                    status_data["errors"].append(name)
+                                print(f"[❌ {board_id}] 历史日志中发现错误: {name}")
+                        
+                        # 检查严重错误
+                        critical_keywords = rules.get("critical_keywords", ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"])
+                        if any(kw in full_kernel_content.upper() for kw in critical_keywords):
+                            status_data["status"] = "Error"
+                            critical_error = f"Critical error detected in history"
+                            if critical_error not in status_data["errors"]:
+                                status_data["errors"].append(critical_error)
+                            print(f"[❌ {board_id}] 历史日志中发现严重错误")
+                        
+                        # 循环任务检查脚本错误
+                        if self.selected_task_type == "循环启动任务":
+                            script_error_patterns = rules.get("script_error_patterns", [])
+                            for pattern in script_error_patterns:
+                                if re.search(pattern, full_kernel_content, re.IGNORECASE):
+                                    status_data["status"] = "Error"
+                                    if "Reboot Script Error" not in status_data["errors"]:
+                                        status_data["errors"].append("Reboot Script Error")
+                                    print(f"[❌ {board_id}] 历史日志中发现脚本错误")
+
+                    # 读取尾部内容进行实时分析
                     f.seek(0, os.SEEK_END)
                     f.seek(max(0, f.tell() - 30000)) # 增加读取量以确保覆盖100行
                     tail = f.read()
@@ -360,7 +406,7 @@ class Agent:
                             elapsed = (last_log_dt - start_dt).total_seconds() / 3600
                             status_data["elapsed_hours"] = round(min(48.0, elapsed), 2)
                             status_data["remaining_hours"] = max(0, round(48.0 - elapsed, 2))
-                            if elapsed >= 48:
+                            if elapsed >= 48 and status_data["status"] != "Error":
                                 status_data["status"] = "Finished"
 
                     # --- 使用动态规则进行检查 ---
@@ -387,7 +433,7 @@ class Agent:
                                 status_data["elapsed_hours"] = round(min(total_hours, elapsed), 2)
                                 status_data["remaining_hours"] = max(0, round(total_hours - elapsed, 2))
                                 
-                                if elapsed >= total_hours:
+                                if elapsed >= total_hours and status_data["status"] != "Error":
                                     status_data["status"] = "Finished"
                             except ValueError:
                                 pass
@@ -403,7 +449,7 @@ class Agent:
                             remaining_sec = int(rem_match[-1])
                             status_data["remaining_seconds"] = remaining_sec
                             total_hours = time_rules.get("total_hours", 48)
-                            if remaining_sec == 0:
+                            if remaining_sec == 0 and status_data["status"] != "Error":
                                 status_data["status"] = "Finished"
                                 status_data["elapsed_hours"] = total_hours
                                 status_data["remaining_hours"] = 0.0
@@ -411,15 +457,32 @@ class Agent:
                                 status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
                                 status_data["elapsed_hours"] = round(total_hours - status_data["remaining_hours"], 2)
 
-                    # 2. 循环检测规则（仅循环任务）
-                    if self.selected_task_type == "循环启动任务":
-                        loop_rules = rules.get("loop_detection", {})
-                        if loop_rules:
-                            loop_pattern = loop_rules.get("pattern", r"BMX7 DDR Reboot Test: Loop(\d+)")
-                            loop_matches = re.findall(loop_pattern, tail)
-                            if loop_matches:
-                                current_loop = int(loop_matches[-1])
-                                status_data["current_loop"] = current_loop
+                # 2. 循环检测规则（仅循环任务）
+                print(f"[🔍 {board_id}] 准备进行循环检测，任务类型: {self.selected_task_type}")
+                if self.selected_task_type == "循环启动任务":
+                    print(f"[🔍 {board_id}] 进入循环检测逻辑")
+                    print(f"[🔍 {board_id}] 当前rules keys: {list(rules.keys())}")
+                    loop_rules = rules.get("loop_detection", {})
+                    print(f"[🔍 {board_id}] loop_rules: {loop_rules}")
+                    if loop_rules:
+                        # 修正模式：Loop后面可能没有空格
+                        loop_pattern = loop_rules.get("pattern", r"BMX7 DDR Reboot Test: Loop(\d+)")
+                        # 使用全量历史日志检测循环次数
+                        loop_matches = re.findall(loop_pattern, full_kernel_content)
+                        print(f"[🔍 {board_id}] 循环匹配结果: {len(loop_matches)} 个")
+                        if len(loop_matches) > 0:
+                            print(f"[🔍 {board_id}] 前5个匹配: {loop_matches[:5]}")
+                            current_loop = int(loop_matches[-1])
+                            total_loops = max([int(loop) for loop in loop_matches])  # 获取最大循环次数
+                            status_data["current_loop"] = current_loop
+                            status_data["total_loops"] = total_loops  # 新增总循环次数
+                            print(f"[🔄 {board_id}] 检测到循环: {current_loop}/{total_loops}")
+                        else:
+                            print(f"[⚠️ {board_id}] 未找到循环信息，搜索关键词 'BMX7 DDR Reboot Test'")
+                            # 搜索包含关键词的行
+                            sample_lines = [line for line in full_kernel_content.split('\n') if 'BMX7 DDR Reboot Test' in line][:3]
+                            for line in sample_lines:
+                                print(f"[📝 {board_id}] 示例行: {line.strip()}")
 
                     # 3. 错误模式检测
                     error_patterns = rules.get("error_patterns", [])
