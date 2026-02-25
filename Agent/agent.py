@@ -3,6 +3,7 @@ import re
 import time
 import requests
 import json
+import urllib.parse
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -93,7 +94,9 @@ class Agent:
     def fetch_rules(self):
         """从后端获取规则配置"""
         try:
-            rules_url = BACKEND_URL.replace('/api/report', f'/api/rules/{self.selected_task_type}')
+            # 对任务类型进行URL编码，解决中文字符问题
+            encoded_task_type = urllib.parse.quote(self.selected_task_type)
+            rules_url = BACKEND_URL.replace('/api/report', f'/api/rules/{encoded_task_type}')
             response = requests.get(rules_url, timeout=10)
             if response.status_code == 200:
                 rules_data = response.json()

@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from models import RigReport, RuleConfig
+from pydantic import BaseModel
+from typing import Dict, Any, List
 import store
-import json
+import models
+import urllib.parse
 
 app = FastAPI(title="Rig Monitoring System API")
 
@@ -50,7 +51,9 @@ async def delete_rig(rig_id: str):
 async def get_rules(task_type: str):
     """获取特定任务类型的规则配置"""
     try:
-        rules = store.get_rules_by_task_type(task_type)
+        # 对URL编码的任务类型进行解码
+        decoded_task_type = urllib.parse.unquote(task_type)
+        rules = store.get_rules_by_task_type(decoded_task_type)
         return rules
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get rules: {str(e)}")
@@ -68,8 +71,10 @@ async def get_all_rules():
 async def update_rules(task_type: str, rules: RuleConfig):
     """更新特定任务类型的规则配置"""
     try:
-        success = store.update_rules(task_type, rules)
-        return {"status": "success", "message": f"Rules for {task_type} updated"}
+        # 对URL编码的任务类型进行解码
+        decoded_task_type = urllib.parse.unquote(task_type)
+        success = store.update_rules(decoded_task_type, rules)
+        return {"status": "success", "message": f"Rules for {decoded_task_type} updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update rules: {str(e)}")
 
