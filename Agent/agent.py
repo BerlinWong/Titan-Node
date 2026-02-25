@@ -46,6 +46,10 @@ class Agent:
         self.log_pairs: Dict[str, LogPair] = {}
         # 状态追踪：记录每个板子的上一次 Loop 编号
         self.prev_loops: Dict[str, int] = {}
+        # 规则配置缓存
+        self.rules_cache: Dict[str, dict] = {}
+        self.last_rules_update: float = 0
+        self.rules_update_interval = 300  # 5分钟更新一次规则
 
     def interactive_setup(self):
         """交互式启动流程"""
@@ -82,7 +86,92 @@ class Agent:
             print("无效输入，请选择正确的任务类型。")
 
         print(f"\n配置完成! \n当前台架: {self.rig_id}\n监控路径: {self.selected_case_dir}\n任务类型: {self.selected_task_type}\n正在开始分析...")
+        # 启动时获取规则
+        self.fetch_rules()
         return True
+
+    def fetch_rules(self):
+        """从后端获取规则配置"""
+        try:
+            rules_url = BACKEND_URL.replace('/api/report', f'/api/rules/{self.selected_task_type}')
+            response = requests.get(rules_url, timeout=10)
+            if response.status_code == 200:
+                rules_data = response.json()
+                self.rules_cache[self.selected_task_type] = rules_data['rules']
+                self.last_rules_update = time.time()
+                print(f"✅ 已获取 {self.selected_task_type} 规则配置 v{rules_data.get('version', 'unknown')}")
+            else:
+                print(f"⚠️ 获取规则失败: HTTP {response.status_code}")
+        except Exception as e:
+            print(f"⚠️ 获取规则失败: {e}")
+            # 如果获取失败，使用默认规则
+            self._load_default_rules()
+
+    def _load_default_rules(self):
+        """加载默认规则（作为后备）"""
+        default_rules = {
+            "循环启动任务": {
+                "time_calculation": {
+                    "method": "reboot_script",
+                    "script_pattern": r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*bmx7_ddr_setup_reboot\.sh",
+                    "total_hours": 48
+                },
+                "loop_detection": {
+                    "pattern": r"BMX7 DDR Reboot Test: Loop(\d+)"
+                },
+                "error_patterns": [
+                    {"name": "Reboot Error", "pattern": "Switch to Full Training Boot"},
+                    {"name": "Reboot Error", "pattern": "Switch to Run Full Training Mode"},
+                    {"name": "Reboot Error", "pattern": "2D Training Successfully！"},
+                    {"name": "Miscompare Detected", "pattern": "Error: Miscompare"},
+                    {"name": "Mismatch Detected", "pattern": "[Error] Mismatch"}
+                ],
+                "script_error_patterns": [
+                    r"Permission denied",
+                    r"No such file or directory", 
+                    r"Command not found",
+                    r"Error executing"
+                ],
+                "critical_keywords": ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"],
+                "hang_detection": {
+                    "threshold_seconds": 300,
+                    "check_kernel": True,
+                    "check_cm55": True
+                }
+            },
+            "固定时长任务": {
+                "time_calculation": {
+                    "method": "remaining_seconds",
+                    "pattern": r"Log: Seconds remaining: (\d+)",
+                    "total_hours": 48
+                },
+                "error_patterns": [
+                    {"name": "Miscompare Detected", "pattern": "Error: Miscompare"},
+                    {"name": "Mismatch Detected", "pattern": "[Error] Mismatch"}
+                ],
+                "critical_keywords": ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"],
+                "hang_detection": {
+                    "threshold_seconds": 300,
+                    "check_kernel": True,
+                    "check_cm55": True
+                }
+            }
+        }
+        
+        if self.selected_task_type in default_rules:
+            self.rules_cache[self.selected_task_type] = default_rules[self.selected_task_type]
+            print(f"✅ 已加载 {self.selected_task_type} 默认规则")
+
+    def get_current_rules(self) -> dict:
+        """获取当前任务类型的规则，定期更新"""
+        current_time = time.time()
+        
+        # 检查是否需要更新规则
+        if (current_time - self.last_rules_update > self.rules_update_interval or 
+            self.selected_task_type not in self.rules_cache):
+            self.fetch_rules()
+        
+        return self.rules_cache.get(self.selected_task_type, {})
 
     def scan_and_pair_logs(self):
         """扫描选中的目录并进行日志配对"""
@@ -274,89 +363,110 @@ class Agent:
                             if elapsed >= 48:
                                 status_data["status"] = "Finished"
 
-                    # --- 规则检测：Hang 检测 (5分钟阈值) ---
+                    # --- 使用动态规则进行检查 ---
+                    rules = self.get_current_rules()
+                    
+                    if not rules:
+                        print(f"[⚠️ {board_id}] 无可用规则，跳过解析")
+                        return status_data
+                    
+                    # 1. 时间计算规则
+                    time_rules = rules.get("time_calculation", {})
+                    if time_rules.get("method") == "reboot_script":
+                        # 循环启动任务：基于reboot脚本时间
+                        script_pattern = time_rules.get("script_pattern", r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*bmx7_ddr_setup_reboot\.sh")
+                        reboot_script_matches = re.findall(script_pattern, tail)
+                        if reboot_script_matches:
+                            script_time_str = reboot_script_matches[-1]
+                            try:
+                                script_dt = datetime.strptime(script_time_str, "%Y-%m-%d %H:%M:%S")
+                                now = datetime.now()
+                                elapsed = (now - script_dt).total_seconds() / 3600
+                                total_hours = time_rules.get("total_hours", 48)
+                                
+                                status_data["elapsed_hours"] = round(min(total_hours, elapsed), 2)
+                                status_data["remaining_hours"] = max(0, round(total_hours - elapsed, 2))
+                                
+                                if elapsed >= total_hours:
+                                    status_data["status"] = "Finished"
+                            except ValueError:
+                                pass
+                        else:
+                            status_data["remaining_hours"] = time_rules.get("total_hours", 48)
+                            status_data["elapsed_hours"] = 0.0
+                            
+                    elif time_rules.get("method") == "remaining_seconds":
+                        # 固定时长任务：基于remaining seconds
+                        pattern = time_rules.get("pattern", r"Log: Seconds remaining: (\d+)")
+                        rem_match = re.findall(pattern, tail)
+                        if rem_match:
+                            remaining_sec = int(rem_match[-1])
+                            status_data["remaining_seconds"] = remaining_sec
+                            total_hours = time_rules.get("total_hours", 48)
+                            if remaining_sec == 0:
+                                status_data["status"] = "Finished"
+                                status_data["elapsed_hours"] = total_hours
+                                status_data["remaining_hours"] = 0.0
+                            else:
+                                status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
+                                status_data["elapsed_hours"] = round(total_hours - status_data["remaining_hours"], 2)
+
+                    # 2. 循环检测规则（仅循环任务）
+                    if self.selected_task_type == "循环启动任务":
+                        loop_rules = rules.get("loop_detection", {})
+                        if loop_rules:
+                            loop_pattern = loop_rules.get("pattern", r"BMX7 DDR Reboot Test: Loop(\d+)")
+                            loop_matches = re.findall(loop_pattern, tail)
+                            if loop_matches:
+                                current_loop = int(loop_matches[-1])
+                                status_data["current_loop"] = current_loop
+
+                    # 3. 错误模式检测
+                    error_patterns = rules.get("error_patterns", [])
+                    for error_rule in error_patterns:
+                        pattern = error_rule.get("pattern", "")
+                        name = error_rule.get("name", "Unknown Error")
+                        if pattern in tail:
+                            status_data["status"] = "Error"
+                            if name not in status_data["errors"]:
+                                status_data["errors"].append(name)
+
+                    # 4. 脚本错误检测（仅循环任务）
+                    if self.selected_task_type == "循环启动任务":
+                        script_error_patterns = rules.get("script_error_patterns", [])
+                        for pattern in script_error_patterns:
+                            if re.search(pattern, tail, re.IGNORECASE):
+                                status_data["status"] = "Error"
+                                if "Reboot Script Error" not in status_data["errors"]:
+                                    status_data["errors"].append("Reboot Script Error")
+
+                    # 5. 严重错误检测
+                    critical_keywords = rules.get("critical_keywords", ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"])
+                    if any(kw in tail.upper() for kw in critical_keywords):
+                        status_data["status"] = "Error"
+                        status_data["errors"].append(f"Critical error: {status_data['last_kernel_log']}")
+
+                    # 6. 挂起检测
+                    hang_rules = rules.get("hang_detection", {})
+                    threshold = hang_rules.get("threshold_seconds", 300)
+                    check_kernel = hang_rules.get("check_kernel", True)
+                    check_cm55 = hang_rules.get("check_cm55", True)
+                    
                     now = datetime.now()
-                    # A. Kernel Hang
-                    if status_data.get("kernel_heartbeat"):
+                    if check_kernel and status_data.get("kernel_heartbeat"):
                         k_dt = datetime.strptime(status_data["kernel_heartbeat"], "%Y-%m-%d %H:%M:%S")
-                        if (now - k_dt).total_seconds() > 300 and status_data["status"] not in ["Finished", "Error"]:
+                        if (now - k_dt).total_seconds() > threshold and status_data["status"] not in ["Finished", "Error"]:
                             status_data["is_hang"] = True
                             status_data["status"] = "Error"
                             if "Kernel Hang Detected (>5min)" not in status_data["errors"]:
                                 status_data["errors"].append("Kernel Hang Detected (>5min)")
 
-                    # B. CM55 Hang
-                    if status_data.get("cm55_heartbeat"):
+                    if check_cm55 and status_data.get("cm55_heartbeat"):
                         c_dt = datetime.strptime(status_data["cm55_heartbeat"], "%Y-%m-%d %H:%M:%S")
-                        if (now - c_dt).total_seconds() > 300 and status_data["status"] not in ["Finished", "Error"]:
+                        if (now - c_dt).total_seconds() > threshold and status_data["status"] not in ["Finished", "Error"]:
                             status_data["status"] = "Error"
                             if "CM55 Hang Detected (>5min)" not in status_data["errors"]:
                                 status_data["errors"].append("CM55 Hang Detected (>5min)")
-
-                    # --- 规则检测：通用错误关键字 ---
-                    if "Error: Miscompare" in tail:
-                        status_data["status"] = "Error"
-                        if "Miscompare Detected" not in status_data["errors"]:
-                            status_data["errors"].append("Miscompare Detected")
-                    if "[Error] Mismatch" in tail:
-                        status_data["status"] = "Error"
-                        if "Mismatch Detected" not in status_data["errors"]:
-                            status_data["errors"].append("Mismatch Detected")
-
-                    # --- 根据任务类型进行分类检查 ---
-                    if self.selected_task_type == "循环启动任务":
-                        # 1. 循环启动任务
-                        # 错误检 1: Switch to 路径错误
-                        reboot_errors = [
-                            "Switch to Full Training Boot",
-                            "Switch to Run Full Training Mode",
-                            "2D Training Successfully！"
-                        ]
-                        for r_err in reboot_errors:
-                            if r_err in tail:
-                                status_data["status"] = "Error"
-                                if f"Reboot Error: {r_err}" not in status_data["errors"]:
-                                    status_data["errors"].append(f"Reboot Error: {r_err}")
-                                
-                        loop_matches = re.findall(r'BMX7 DDR Reboot Test: Loop(\d+)', tail)
-                        if loop_matches:
-                            current_loop = int(loop_matches[-1])
-                            status_data["current_loop"] = current_loop
-                            # 记录到 prev_loops 用于连续性检查 (逻辑保持)
-                        
-                        # 循环任务也使用 remaining_seconds 计算时间
-                        rem_match = re.findall(r'Log: Seconds remaining: (\d+)', tail)
-                        if rem_match:
-                            remaining_sec = int(rem_match[-1])
-                            status_data["remaining_seconds"] = remaining_sec
-                            if remaining_sec == 0:
-                                status_data["status"] = "Finished"
-                                status_data["elapsed_hours"] = 48.0
-                                status_data["remaining_hours"] = 0.0
-                            else:
-                                # 以 48h 为基准百分比展示，或直接用秒数换算小时
-                                status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
-                                status_data["elapsed_hours"] = round(48.0 - status_data["remaining_hours"], 2)
-                    else:
-                        # 2. 固定时长任务
-                        rem_match = re.findall(r'Log: Seconds remaining: (\d+)', tail)
-                        if rem_match:
-                            remaining_sec = int(rem_match[-1])
-                            status_data["remaining_seconds"] = remaining_sec
-                            if remaining_sec == 0:
-                                status_data["status"] = "Finished"
-                                status_data["elapsed_hours"] = 48.0
-                                status_data["remaining_hours"] = 0.0
-                            else:
-                                # 以 48h 为基准百分比展示，或直接用秒数换算小时
-                                status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
-                                status_data["elapsed_hours"] = round(48.0 - status_data["remaining_hours"], 2)
-
-                    # 严重错误检测 (优化版)
-                    critical_keywords = ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"]
-                    if any(kw in tail.upper() for kw in critical_keywords):
-                        status_data["status"] = "Error"
-                        status_data["errors"].append(f"Critical error: {status_data['last_kernel_log']}")
 
             except Exception as e:
                 print(f"解析 Kernel 失败: {e}")

@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from models import RigReport
+from models import RigReport, RuleConfig
 import store
+import json
 
 app = FastAPI(title="Rig Monitoring System API")
 
@@ -44,6 +45,33 @@ async def delete_rig(rig_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Rig not found")
     return {"status": "success", "message": f"Rig {rig_id} deleted"}
+
+@app.get("/api/rules/{task_type}")
+async def get_rules(task_type: str):
+    """获取特定任务类型的规则配置"""
+    try:
+        rules = store.get_rules_by_task_type(task_type)
+        return rules
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get rules: {str(e)}")
+
+@app.get("/api/rules")
+async def get_all_rules():
+    """获取所有规则配置"""
+    try:
+        all_rules = store.get_all_rules()
+        return all_rules
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get rules: {str(e)}")
+
+@app.post("/api/rules/{task_type}")
+async def update_rules(task_type: str, rules: RuleConfig):
+    """更新特定任务类型的规则配置"""
+    try:
+        success = store.update_rules(task_type, rules)
+        return {"status": "success", "message": f"Rules for {task_type} updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update rules: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

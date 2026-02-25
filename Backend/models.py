@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class BoardStatus(BaseModel):
@@ -26,6 +26,13 @@ class BoardStatus(BaseModel):
     kernel_stream: List[str] = []
     ddr_details: dict = {}
     temp_points: List[dict] = []
+    last_updated: datetime = Field(default_factory=datetime.now)
+
+class RuleConfig(BaseModel):
+    """规则配置模型"""
+    task_type: str
+    rules: Dict[str, Any]
+    version: str = "1.0"
     last_updated: datetime = Field(default_factory=datetime.now)
 
 class RigReport(BaseModel):
