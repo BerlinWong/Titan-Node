@@ -19,6 +19,7 @@ GET /api/rules
 ```
 
 **响应示例：**
+
 ```json
 {
   "循环启动任务": {
@@ -33,8 +34,8 @@ GET /api/rules
         "pattern": "BMX7 DDR Reboot Test: Loop(\\d+)"
       },
       "error_patterns": [
-        {"name": "Reboot Error", "pattern": "Switch to Full Training Boot"},
-        {"name": "Miscompare Detected", "pattern": "Error: Miscompare"}
+        { "name": "Reboot Error", "pattern": "Switch to Full Training Boot" },
+        { "name": "Miscompare Detected", "pattern": "Error: Miscompare" }
       ],
       "critical_keywords": ["KERNEL PANIC", "MACHINE CHECK"],
       "hang_detection": {
@@ -56,6 +57,7 @@ GET /api/rules/{task_type}
 ```
 
 **参数：**
+
 - `task_type`: 任务类型（如：循环启动任务、固定时长任务）
 
 ### 更新规则配置
@@ -65,6 +67,7 @@ POST /api/rules/{task_type}
 ```
 
 **请求体：**
+
 ```json
 {
   "task_type": "循环启动任务",
@@ -74,9 +77,7 @@ POST /api/rules/{task_type}
       "script_pattern": "\\[(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\].*bmx7_ddr_setup_reboot\\.sh",
       "total_hours": 48
     },
-    "error_patterns": [
-      {"name": "New Error", "pattern": "New error pattern"}
-    ]
+    "error_patterns": [{ "name": "New Error", "pattern": "New error pattern" }]
   },
   "version": "1.1"
 }
@@ -87,11 +88,13 @@ POST /api/rules/{task_type}
 ### time_calculation（时间计算）
 
 **reboot_script 方法（循环任务）：**
+
 - `method`: "reboot_script"
 - `script_pattern`: 检测脚本执行的正则表达式
 - `total_hours`: 总时长（小时）
 
 **remaining_seconds 方法（固定时长任务）：**
+
 - `method`: "remaining_seconds"
 - `pattern`: 提取剩余秒数的正则表达式
 - `total_hours`: 总时长（小时）
@@ -99,6 +102,7 @@ POST /api/rules/{task_type}
 ### error_patterns（错误模式）
 
 数组格式，每个错误包含：
+
 - `name`: 错误名称
 - `pattern`: 匹配模式
 

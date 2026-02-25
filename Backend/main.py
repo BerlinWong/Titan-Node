@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, List
 import store
@@ -19,6 +20,28 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "Rig Monitoring System API is running"}
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点"""
+    return {"status": "healthy", "service": "Rig Monitoring System API"}
+
+@app.get("/api/endpoints")
+async def list_endpoints():
+    """列出所有可用的API端点"""
+    return {
+        "endpoints": [
+            {"method": "GET", "path": "/", "description": "根端点"},
+            {"method": "GET", "path": "/health", "description": "健康检查"},
+            {"method": "GET", "path": "/api/endpoints", "description": "列出所有端点"},
+            {"method": "GET", "path": "/api/status", "description": "获取所有台架状态"},
+            {"method": "POST", "path": "/api/report", "description": "上报台架数据"},
+            {"method": "DELETE", "path": "/api/status/{rig_id}", "description": "删除特定台架"},
+            {"method": "GET", "path": "/api/rules", "description": "获取所有规则配置"},
+            {"method": "GET", "path": "/api/rules/{task_type}", "description": "获取特定任务类型规则"},
+            {"method": "POST", "path": "/api/rules/{task_type}", "description": "更新特定任务类型规则"}
+        ]
+    }
 
 @app.post("/api/report")
 async def report_status(report: RigReport):
