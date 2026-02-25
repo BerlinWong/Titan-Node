@@ -14,13 +14,16 @@ data_store: Dict[str, RigReport] = {}
 rules_store: Dict[str, RuleConfig] = {}
 
 def save_to_disk():
-    """将内存数据序列化到磁盘"""
+    """将内存数据序列化到磁盘（Vercel环境跳过）"""
+    # Vercel Serverless环境是只读的，跳过文件写入
+    import os
+    if os.environ.get("VERCEL"):
+        return  # Vercel环境不写入文件
+    
     try:
         serializable_data = {}
         for rid, report in data_store.items():
-            # 转换成 json 兼容格式
-            report_dict = report.model_dump()
-            # 转换 datetime
+            report_dict = report.dict()
             if report_dict.get("last_report_at"):
                 report_dict["last_report_at"] = report_dict["last_report_at"].isoformat()
             serializable_data[rid] = report_dict
@@ -87,11 +90,16 @@ def delete_rig(rig_id: str) -> bool:
 # ===== 规则管理功能 =====
 
 def save_rules_to_disk():
-    """将规则配置序列化到磁盘"""
+    """将规则配置序列化到磁盘（Vercel环境跳过）"""
+    # Vercel Serverless环境是只读的，跳过文件写入
+    import os
+    if os.environ.get("VERCEL"):
+        return  # Vercel环境不写入文件
+        
     try:
         serializable_rules = {}
-        for task_type, rule_config in rules_store.items():
-            rule_dict = rule_config.model_dump()
+        for task_type, rule in rules_store.items():
+            rule_dict = rule.dict()
             if rule_dict.get("last_updated"):
                 rule_dict["last_updated"] = rule_dict["last_updated"].isoformat()
             serializable_rules[task_type] = rule_dict
@@ -196,5 +204,56 @@ def update_rules(task_type: str, rules: RuleConfig) -> bool:
     save_rules_to_disk()
     return True
 
-# 初始化时加载规则
+def ensure_default_rules():
+    """确保有默认规则配置"""
+    import os
+    if os.environ.get("VERCEL") and not rules_store:
+        # Vercel环境且规则为空，初始化默认规则
+        from datetime import datetime
+        
+        default_rules = {
+            "循环启动任务": RuleConfig(
+                task_type="循环启动任务",
+                rules={
+                    "error_patterns": [
+                        {"name": "Miscompare Detected", "pattern": "Error: miscompare"},
+                        {"name": "Hardware Miscompare", "pattern": "Hardware Error: miscompare"},
+                        {"name": "Hardware MISMATCH", "pattern": "Error: MISMATCH"},
+                        {"name": "Report Miscompare", "pattern": "Report Error: miscompare"},
+                        {"name": "Reboot Error", "pattern": "Switch to Full Training Boot"},
+                        {"name": "Reboot Error", "pattern": "Switch to Run Full Training Mode"},
+                        {"name": "Reboot Error", "pattern": "2D Training Successfully！"},
+                        {"name": "Mismatch Detected", "pattern": "[Error] Mismatch"},
+                        {"name": "NPU Mismatch Error", "pattern": "Error: MISMATCH occured druing NPU clgd Test"}
+                    ],
+                    "loop_detection": {
+                        "pattern": "BMX7 DDR Reboot Test: Loop(\\d+)"
+                    }
+                },
+                version="1.4",
+                last_updated=datetime.now()
+            ),
+            "固定时长任务": RuleConfig(
+                task_type="固定时长任务",
+                rules={
+                    "error_patterns": [
+                        {"name": "Miscompare Detected", "pattern": "Error: miscompare"},
+                        {"name": "Hardware Miscompare", "pattern": "Hardware Error: miscompare"},
+                        {"name": "Report Miscompare", "pattern": "Report Error: miscompare"},
+                        {"name": "Mismatch Detected", "pattern": "[Error] Mismatch"}
+                    ]
+                },
+                version="1.1",
+                last_updated=datetime.now()
+            )
+        }
+        
+        for task_type, rule_config in default_rules.items():
+            rules_store[task_type] = rule_config
+
+# 初始化时从磁盘加载数据
+load_from_disk()
 load_rules_from_disk()
+
+# 确保Vercel环境有默认规则
+ensure_default_rules()
