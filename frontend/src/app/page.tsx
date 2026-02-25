@@ -157,14 +157,23 @@ const RigCard = ({ rig }: { rig: Rig }) => {
 
   // 汇总统计仪表盘
   const activeTask = rig.boards[0]?.task_type || 'Unknown';
-  const startTimes = rig.boards
-    .map(b => b.start_time)
-    .filter(t => t && t !== 'Unknown')
-    .map(t => new Date(t!).getTime());
-  const earliestStart = startTimes.length > 0 ? Math.min(...startTimes) : null;
-  const startTimeStr = earliestStart ? new Date(earliestStart).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--/-- --:--';
-  const expectedEnd = earliestStart ? new Date(earliestStart + 48 * 3600 * 1000) : null;
+  
+  // 基于剩余时间反推Start和ETD
+  const now = new Date().getTime();
+  const avgRemainingHours = rig.boards.length > 0 
+    ? rig.boards.reduce((sum, b) => sum + b.remaining_hours, 0) / rig.boards.length 
+    : 48;
+  const avgElapsedHours = rig.boards.length > 0 
+    ? rig.boards.reduce((sum, b) => sum + b.elapsed_hours, 0) / rig.boards.length 
+    : 0;
+  
+  // ETD = 当前时间 + 平均剩余时间
+  const expectedEnd = avgRemainingHours > 0 ? new Date(now + avgRemainingHours * 3600 * 1000) : null;
   const endTimeStr = expectedEnd ? expectedEnd.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--/-- --:--';
+  
+  // Start = 当前时间 - 平均已用时间
+  const calculatedStart = avgElapsedHours > 0 ? new Date(now - avgElapsedHours * 3600 * 1000) : null;
+  const startTimeStr = calculatedStart ? calculatedStart.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--/-- --:--';
   const successRate = rig.boards.length > 0 ? ((rig.boards.filter(b => b.status !== 'Error').length / rig.boards.length) * 100).toFixed(0) : '0';
   const reportDelay = rig.seconds_since_report ? `${rig.seconds_since_report.toFixed(0)}s` : '--s';
 

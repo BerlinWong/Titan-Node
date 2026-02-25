@@ -56,32 +56,15 @@ class Agent:
         if custom_rig_id:
             self.rig_id = custom_rig_id
 
-        # 1. 输入根目录
-        while True:
-            self.root_dir = input("请输入日志根目录路径 (例如 ./logs): ").strip()
-            if os.path.isdir(self.root_dir):
-                break
-            print(f"错误: 路径 '{self.root_dir}' 不是一个有效的目录。")
-
-        # 2. 选择 Case 文件夹
-        subdirs = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))]
-        if not subdirs:
-            print("该目录下没有子文件夹，请检查目录结构。")
+        # 1. 直接设置日志路径
+        default_path = "D:\\SIP_SAMSUNG_8GB\\TEMP"
+        self.selected_case_dir = input(f"请输入日志路径 (直接回车默认: {default_path}): ").strip()
+        if not self.selected_case_dir:
+            self.selected_case_dir = default_path
+        
+        if not os.path.isdir(self.selected_case_dir):
+            print(f"错误: 路径 '{self.selected_case_dir}' 不是一个有效的目录。")
             return False
-        
-        print("\n请选择当前需要分析的测试 Case 路径:")
-        for i, d in enumerate(subdirs, 1):
-            print(f"  {i}. {d}")
-        
-        while True:
-            try:
-                choice = int(input(f"请输入编号 (1-{len(subdirs)}): "))
-                if 1 <= choice <= len(subdirs):
-                    self.selected_case_dir = os.path.join(self.root_dir, subdirs[choice-1])
-                    break
-            except ValueError:
-                pass
-            print("无效输入，请输入正确的数字。")
 
         # 3. 选择任务类型
         print("\n请选择当前任务类型:")
@@ -201,11 +184,19 @@ class Agent:
                     all_matches = regex.findall(full_content)
                     
                     raw_points = []
-                    sensor_latest = {}
+                    sensor_history = {}  # 存储每个传感器的所有历史温度值
+                    sensor_latest = {}   # 仍然保留最后一次值用于仪表盘显示
+                    
                     for timeStr, sensorName, valStr in all_matches:
-                        # 记录所有传感器的最后一次值用于仪表盘
                         val = float(valStr)
+                        
+                        # 记录最后一次值用于仪表盘
                         sensor_latest[sensorName] = val
+                        
+                        # 记录历史温度值用于计算最大最小值
+                        if sensorName not in sensor_history:
+                            sensor_history[sensorName] = []
+                        sensor_history[sensorName].append(val)
                         
                         # 仅保留核心传感器的数据点用于绘图
                         # 包含 CPU, DDR, SOC 以及 MIN 结尾的传感器
@@ -217,17 +208,21 @@ class Agent:
                             except ValueError:
                                 pass
                     
-                    # 更新当前实时数值
-                    if sensor_latest:
-                        temps = sensor_latest.values()
-                        status_data["temp_min"] = min(temps)
-                        status_data["temp_max"] = max(temps)
-                        status_data["temperature"] = status_data["temp_min"]
+                    # 计算整个日志历史中的温度最大值和最小值
+                    if sensor_history:
+                        all_temps = []
+                        for temps in sensor_history.values():
+                            all_temps.extend(temps)
                         
-                        # 特别记录 DDR 细节 (TS1-6)
+                        if all_temps:
+                            status_data["temp_min"] = min(all_temps)
+                            status_data["temp_max"] = max(all_temps)
+                            status_data["temperature"] = status_data["temp_min"]  # 使用历史最低温度作为主要显示值
+                        
+                        # 特别记录 DDR 细节 (TS1-6) - 使用最后一次值
                         status_data["ddr_details"] = {k.replace("PVTC_TS_DDR_", ""): v for k, v in sensor_latest.items() if "DDR" in k.upper()}
                         
-                        # 兼容旧字段：查找 TS6_DDR 或主 DDR 温度
+                        # 兼容旧字段：查找 TS6_DDR 或主 DDR 温度 - 使用最后一次值
                         ddr_val = next((v for k, v in sensor_latest.items() if "TS6_DDR" in k), 
                                   next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), 0.0))
                         status_data["temp_ddr"] = ddr_val
@@ -328,6 +323,20 @@ class Agent:
                             current_loop = int(loop_matches[-1])
                             status_data["current_loop"] = current_loop
                             # 记录到 prev_loops 用于连续性检查 (逻辑保持)
+                        
+                        # 循环任务也使用 remaining_seconds 计算时间
+                        rem_match = re.findall(r'Log: Seconds remaining: (\d+)', tail)
+                        if rem_match:
+                            remaining_sec = int(rem_match[-1])
+                            status_data["remaining_seconds"] = remaining_sec
+                            if remaining_sec == 0:
+                                status_data["status"] = "Finished"
+                                status_data["elapsed_hours"] = 48.0
+                                status_data["remaining_hours"] = 0.0
+                            else:
+                                # 以 48h 为基准百分比展示，或直接用秒数换算小时
+                                status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
+                                status_data["elapsed_hours"] = round(48.0 - status_data["remaining_hours"], 2)
                     else:
                         # 2. 固定时长任务
                         rem_match = re.findall(r'Log: Seconds remaining: (\d+)', tail)
