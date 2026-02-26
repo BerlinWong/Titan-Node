@@ -62,6 +62,8 @@ const TemperatureChart = ({ dataPoints, sidebarCollapsed }: { dataPoints: Array<
         symbol: 'none',
         emphasis: { focus: 'series' },
         data: data,
+        lineStyle: name.toUpperCase().includes('DDR') ? { color: '#E85D2C', width: 3 } : undefined,
+        itemStyle: name.toUpperCase().includes('DDR') ? { color: '#E85D2C' } : undefined,
       });
       selected[name] = isDefaultVisible;
     });
