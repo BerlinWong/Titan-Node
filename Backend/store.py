@@ -76,7 +76,10 @@ def get_all_rigs():
     for report in data_store.values():
         if report.last_report_at:
             report.seconds_since_report = (now - report.last_report_at).total_seconds()
-    return list(data_store.values())
+    
+    # 按SIP01 SIP02从左往右排序
+    sorted_rigs = sorted(data_store.values(), key=lambda x: x.rig_id)
+    return sorted_rigs
 
 def get_rig_by_id(rig_id: str):
     from datetime import datetime

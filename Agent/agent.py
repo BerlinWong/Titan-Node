@@ -411,7 +411,6 @@ class Agent:
 
                     # --- 使用动态规则进行检查 ---
                     rules = self.get_current_rules()
-                    print(f"[🔍 {board_id}] 获取到规则: {rules}")
                     
                     if not rules:
                         print(f"[⚠️ {board_id}] 无可用规则，跳过解析")
