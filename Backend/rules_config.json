@@ -46,6 +46,11 @@
     "固定时长任务": {
         "task_type": "固定时长任务",
         "rules": {
+            "time_calculation": {
+                "method": "remaining_seconds",
+                "pattern": "Log: Seconds remaining: (\\d+)",
+                "total_hours": 48
+            },
             "error_patterns": [
                 {
                     "name": "Miscompare Detected",
@@ -63,9 +68,15 @@
                     "name": "Mismatch Detected",
                     "pattern": "[Error] Mismatch"
                 }
-            ]
+            ],
+            "critical_keywords": ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"],
+            "hang_detection": {
+                "threshold_seconds": 300,
+                "check_kernel": true,
+                "check_cm55": true
+            }
         },
-        "version": "1.1",
-        "last_updated": "2026-02-25T19:12:55.355798"
+        "version": "1.2",
+        "last_updated": "2026-02-26T10:06:00.000000"
     }
 }
