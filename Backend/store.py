@@ -1,7 +1,7 @@
 import json
 import os
-from typing import Dict
-from models import RigReport, RuleConfig
+from typing import Dict, List
+from models import RigReport, RuleConfig, TemperatureData
 
 # 持久化文件路径
 STATE_FILE = "rig_status_v1.json"
@@ -100,7 +100,7 @@ def delete_rig(rig_id: str) -> bool:
 
 # ===== 温度数据管理 =====
 TEMPERATURE_FILE = "temperature_data.json"
-temperature_store: Dict[str, models.TemperatureData] = {}  # key: f"{rig_id}_{board_id}"
+temperature_store: Dict[str, TemperatureData] = {}  # key: f"{rig_id}_{board_id}"
 
 def save_temperature_to_disk():
     """保存温度数据到磁盘"""
@@ -121,7 +121,7 @@ def load_temperature_from_disk():
             raw_data = json.load(f)
             new_store = {}
             for key, item in raw_data.items():
-                new_store[key] = models.TemperatureData(**item)
+                new_store[key] = TemperatureData(**item)
             temperature_store = new_store
     except FileNotFoundError:
         temperature_store = {}
@@ -129,7 +129,7 @@ def load_temperature_from_disk():
         print(f"Failed to load temperature data: {e}")
         temperature_store = {}
 
-def update_temperature_data(temp_reports: List[models.TemperatureData]):
+def update_temperature_data(temp_reports: List[TemperatureData]):
     """更新温度数据"""
     from datetime import datetime
     for temp_data in temp_reports:
@@ -138,7 +138,7 @@ def update_temperature_data(temp_reports: List[models.TemperatureData]):
         temperature_store[key] = temp_data
     save_temperature_to_disk()
 
-def get_temperature_data(rig_id: str, board_id: str) -> models.TemperatureData:
+def get_temperature_data(rig_id: str, board_id: str) -> TemperatureData:
     """获取指定板子的温度数据"""
     key = f"{rig_id}_{board_id}"
     return temperature_store.get(key)
