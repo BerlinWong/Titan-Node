@@ -131,6 +131,19 @@ const RigCard = ({ rig }: { rig: Rig }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isPulsing, setIsPulsing] = useState(false);
   const [lastTsRecord, setLastTsRecord] = useState(0);
+  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
+
+  const toggleError = (boardId: string) => {
+    setExpandedErrors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(boardId)) {
+        newSet.delete(boardId);
+      } else {
+        newSet.add(boardId);
+      }
+      return newSet;
+    });
+  };
 
   const errorCount = rig.boards.filter(b => b.status === 'Error').length;
 
@@ -271,10 +284,15 @@ const RigCard = ({ rig }: { rig: Rig }) => {
             <div key={board.board_id} className="group/item">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <div className="relative group">
-                  <span className="text-sm font-black italic text-emerald-500 tracking-tighter">{board.board_id}</span>
-                  {board.status === 'Error' && board.errors && board.errors.length > 0 && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
+                  <div className="relative">
+                  <span 
+                    className="text-sm font-black italic text-emerald-500 tracking-tighter cursor-pointer hover:text-emerald-400 transition-colors"
+                    onClick={() => toggleError(board.board_id)}
+                  >
+                    {board.board_id}
+                  </span>
+                  {board.status === 'Error' && board.errors && board.errors.length > 0 && expandedErrors.has(board.board_id) && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50">
                       <div className="bg-rose-500/95 text-white text-[9px] px-2 py-1.5 rounded-lg shadow-lg border border-rose-400/30 min-w-[120px] max-w-[200px]">
                         <p className="font-black mb-1 text-center">错误详情</p>
                         <div className="space-y-0.5">
