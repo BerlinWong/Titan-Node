@@ -245,14 +245,25 @@ def ensure_default_rules():
             "固定时长任务": RuleConfig(
                 task_type="固定时长任务",
                 rules={
+                    "time_calculation": {
+                        "method": "remaining_seconds",
+                        "pattern": r"Log: Seconds remaining: (\d+)",
+                        "total_hours": 48
+                    },
                     "error_patterns": [
                         {"name": "Miscompare Detected", "pattern": "Error: miscompare"},
                         {"name": "Hardware Miscompare", "pattern": "Hardware Error: miscompare"},
                         {"name": "Report Miscompare", "pattern": "Report Error: miscompare"},
                         {"name": "Mismatch Detected", "pattern": "[Error] Mismatch"}
-                    ]
+                    ],
+                    "critical_keywords": ["KERNEL PANIC", "MACHINE CHECK", "REBOOTING", "OUT OF MEMORY", "SEGMENTATION FAULT"],
+                    "hang_detection": {
+                        "threshold_seconds": 300,
+                        "check_kernel": True,
+                        "check_cm55": True
+                    }
                 },
-                version="1.1",
+                version="1.2",
                 last_updated=datetime.now()
             )
         }

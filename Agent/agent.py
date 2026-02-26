@@ -230,6 +230,8 @@ class Agent:
     def parse_logs(self, pair: LogPair):
         """解析日志对并返回板子状态"""
         board_id = pair.task_desc  # 现在 task_desc 就是 board_id
+        print(f"[🔍 {board_id}] 开始解析日志，任务类型: {self.selected_task_type}")
+        
         status_data = {
             "board_id": board_id,
             "status": "Running",
@@ -409,6 +411,7 @@ class Agent:
 
                     # --- 使用动态规则进行检查 ---
                     rules = self.get_current_rules()
+                    print(f"[🔍 {board_id}] 获取到规则: {rules}")
                     
                     if not rules:
                         print(f"[⚠️ {board_id}] 无可用规则，跳过解析")
@@ -440,9 +443,10 @@ class Agent:
                             status_data["elapsed_hours"] = 0.0
                             
                     elif time_rules.get("method") == "remaining_seconds":
-                        # 固定时长任务：基于remaining seconds
+                        # 固定时长任务：基于remaining seconds，使用全文搜索确保不遗漏
                         pattern = time_rules.get("pattern", r"Log: Seconds remaining: (\d+)")
-                        rem_match = re.findall(pattern, tail)
+                        # 使用全文内容搜索，而不是只搜索尾部
+                        rem_match = re.findall(pattern, full_kernel_content)
                         if rem_match:
                             remaining_sec = int(rem_match[-1])
                             status_data["remaining_seconds"] = remaining_sec
@@ -454,6 +458,9 @@ class Agent:
                             else:
                                 status_data["remaining_hours"] = round(remaining_sec / 3600.0, 2)
                                 status_data["elapsed_hours"] = round(total_hours - status_data["remaining_hours"], 2)
+                            print(f"[✅ {board_id}] 找到剩余时间: {remaining_sec}秒 ({status_data['remaining_hours']}小时)")
+                        else:
+                            print(f"[⚠️ {board_id}] 未找到Seconds remaining信息")
 
                 # 2. 循环检测规则（仅循环任务）
                 print(f"[🔍 {board_id}] 准备进行循环检测，任务类型: {self.selected_task_type}")
