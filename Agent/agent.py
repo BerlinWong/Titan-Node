@@ -281,7 +281,7 @@ class Agent:
                         status_data["cm55_heartbeat"] = cm_ts_match[-1]
 
                     # --- 改进：Agent 本地全量解析并抽样 ---
-                    # 匹配所有满足条件的温度行 (包括 SOC 和 DDR 系列)
+                    # 匹配核心温度传感器 (排除硬件ADC、PMIC等)
                     regex = re.compile(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*?\[(PVTC_TS_(?:SOC|DDR)_[^\]]+)\]\s*[:：]?\s*([-+]?\d*\.?\d+)\s*C')
                     all_matches = regex.findall(full_content)
                     
@@ -301,8 +301,8 @@ class Agent:
                         sensor_history[sensorName].append(val)
                         
                         # 仅保留核心传感器的数据点用于绘图
-                        # 包含 CPU, DDR, SOC 以及 MIN 结尾的传感器
-                        if any(x in sensorName.upper() for x in ["CPU", "DDR", "SOC", "MIN"]):
+                        # 包含 CPU, DDR, SOC 以及 MIN 结尾的核心温度传感器
+                        if any(x in sensorName.upper() for x in ["CPU", "DDR", "SOC", "MIN"]) and "PVTC_TS_" in sensorName:
                             try:
                                 dt = datetime.strptime(timeStr, "%Y-%m-%d %H:%M:%S")
                                 ts = int(dt.timestamp() * 1000)
@@ -310,23 +310,31 @@ class Agent:
                             except ValueError:
                                 pass
                     
-                    # 计算整个日志历史中的温度最大值和最小值
+                    # 计算核心传感器的温度最大值和最小值
                     if sensor_history:
-                        all_temps = []
-                        for temps in sensor_history.values():
-                            all_temps.extend(temps)
+                        core_temps = []
+                        for sensor_name, temps in sensor_history.items():
+                            # 只计算核心传感器的温度统计
+                            if any(x in sensor_name.upper() for x in ["CPU", "DDR", "SOC", "MIN"]):
+                                core_temps.extend(temps)
                         
-                        if all_temps:
-                            status_data["temp_min"] = min(all_temps)
-                            status_data["temp_max"] = max(all_temps)
+                        if core_temps:
+                            status_data["temp_min"] = min(core_temps)
+                            status_data["temp_max"] = max(core_temps)
                             status_data["temperature"] = status_data["temp_min"]  # 使用历史最低温度作为主要显示值
                         
-                        # 特别记录 DDR 细节 (TS1-6) - 使用最后一次值
-                        status_data["ddr_details"] = {k.replace("PVTC_TS_DDR_", ""): v for k, v in sensor_latest.items() if "DDR" in k.upper()}
+                        # 特别记录 DDR 细节 (TS1-6) - 只从核心传感器中获取
+                        core_ddr_sensors = {k: v for k, v in sensor_latest.items() if "DDR" in k.upper() and "PVTC_TS_" in k}
+                        if core_ddr_sensors:
+                            status_data["ddr_details"] = core_ddr_sensors
+                        else:
+                            status_data["ddr_details"] = {}
                         
-                        # 兼容旧字段：查找 TS6_DDR 或主 DDR 温度 - 使用最后一次值
-                        ddr_val = next((v for k, v in sensor_latest.items() if "TS6_DDR" in k), 
-                                  next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), 0.0))
+                        # 兼容旧字段：查找 TS6_DDR 或主 DDR 温度 - 只从核心传感器中获取
+                        if core_ddr_sensors:
+                            ddr_val = max(core_ddr_sensors.values())
+                        else:
+                            ddr_val = 0.0
                         status_data["temp_ddr"] = ddr_val
 
                     # 收集温度曲线数据用于独立API - 按时间窗口计算

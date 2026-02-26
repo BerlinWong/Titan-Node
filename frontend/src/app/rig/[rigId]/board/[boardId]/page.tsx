@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { CONFIG } from '@/config';
 import * as echarts from 'echarts';
 
-const TemperatureChart = ({ dataPoints, sidebarCollapsed }: { dataPoints: Array<{ts: number, name: string, val: number}> | undefined, sidebarCollapsed: boolean }) => {
+const TemperatureChart = ({ dataPoints }: { dataPoints: Array<{ts: number, name: string, val: number}> | undefined }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
@@ -27,11 +27,6 @@ const TemperatureChart = ({ dataPoints, sidebarCollapsed }: { dataPoints: Array<
       chartInstance.current?.dispose();
     };
   }, []);
-
-  useEffect(() => {
-    // 强制同步一次大小，防止状态切换时的延迟
-    setTimeout(() => chartInstance.current?.resize(), 300);
-  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!chartInstance.current || !dataPoints || dataPoints.length === 0) return;
@@ -232,7 +227,6 @@ export default function BoardDetailPage() {
   const [rig, setRig] = useState<Rig | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [temperatureData, setTemperatureData] = useState<any>(null);
   const [loadingTemperature, setLoadingTemperature] = useState(false);
 
@@ -315,110 +309,10 @@ export default function BoardDetailPage() {
 
       <main className="max-w-[1500px] w-full mx-auto flex-1 flex flex-col min-h-0">
         <div className="bg-[#0a0a0b] border border-zinc-800/50 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-0 relative">
-          <div className="flex h-full flex-1 min-h-0 transition-all duration-300">
-            {/* Sidebar - Precision Dock */}
-            <div className={`relative border-r border-zinc-800/50 bg-[#0c0c0d] flex-shrink-0 transition-all duration-500 overflow-hidden flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-72 md:w-80'}`}>
-              
-              {/* Collapse Toggle Button */}
-              <button 
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-[100] w-6 h-12 bg-zinc-800 border border-zinc-700 rounded-full items-center justify-center text-zinc-400 hover:text-emerald-500 hover:bg-zinc-700 transition-all shadow-xl font-bold"
-              >
-                {sidebarCollapsed ? '→' : '←'}
-              </button>
+          <div className="flex-1 flex flex-col min-h-0 bg-[#080809] overflow-hidden">
+            {/* Header Info Banner */}
 
-              <div className="flex-1 flex flex-col min-h-0 custom-scrollbar">
-                {sidebarCollapsed ? (
-                  /* --- ICON ONLY MODE --- */
-                  <div className="flex flex-col items-center py-10 gap-10 animate-in fade-in zoom-in-95 duration-500">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 font-black italic text-sm shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                      {board.board_id.substring(0, 1).toUpperCase()}
-                    </div>
-                    
-                    <div className="flex flex-col items-center gap-6">
-                       {/* Dashboard Icon */}
-                       <a href="/" className="p-3 rounded-xl bg-zinc-900/50 border border-white/5 text-zinc-500 hover:text-emerald-400 transition-all group" title="仪表盘">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-                       </a>
-
-                       {/* Temperature Icon */}
-                       <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]" title="温度分析">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
-                       </div>
-
-                       <div className="w-8 h-px bg-zinc-800 my-2" />
-
-                       <div className="flex flex-col gap-3 items-center opacity-60">
-                          <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
-                          <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
-                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* --- FULL CONTENT MODE --- */
-                  <div className="p-8 space-y-10 animate-in fade-in slide-in-from-left-4 duration-500">
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-4xl font-black italic text-emerald-400 tracking-tighter leading-none truncate mb-8">{board.board_id}</span>
-                      
-                      <nav className="space-y-2">
-                        <a href="/" className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-zinc-900/30 border border-white/5 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800/50 transition-all group">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-                          <span className="text-sm font-black uppercase tracking-widest">仪表盘</span>
-                        </a>
-
-                        <div className="flex items-center gap-4 px-4 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_10px_30px_rgba(16,185,129,0.1)]">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
-                          <span className="text-sm font-black uppercase tracking-widest">温度分析</span>
-                        </div>
-                      </nav>
-
-                      <div className="mt-10 flex gap-3 bg-black/40 p-3 rounded-2xl border border-white/5 w-fit">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-[7px] font-black text-zinc-600 uppercase">Kernel</span>
-                          <HeartbeatDot timestamp={board.kernel_heartbeat} type="Kernel" gap={board.resurrection_gap} />
-                        </div>
-                        <div className="w-px h-6 bg-zinc-800 self-center" />
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-[7px] font-black text-zinc-600 uppercase">CM55</span>
-                          <HeartbeatDot timestamp={board.cm55_heartbeat} type="CM55" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-8">
-                      <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                        <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest mb-2 flex items-center gap-2">
-                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Operational Task
-                        </p>
-                        <p className="text-sm font-bold text-zinc-300 leading-tight">{board.task_type}</p>
-                      </div>
-
-                      <div className="pt-8 border-t border-zinc-800/50">
-                        <div className="flex justify-between items-end mb-4">
-                           <span className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">
-                             {board.task_type === "循环启动任务" ? `Current Loop: ${board.current_loop}` : (board.remaining_seconds ? 'Remaining' : 'Progress')}
-                           </span>
-                           <span className="text-2xl font-black text-emerald-500 tracking-tighter tabular-nums leading-none">
-                             {board.task_type === "循环启动任务" ? `#${board.current_loop}` : (board.remaining_seconds ? `${board.remaining_seconds}s` : `${Math.min(100, (board.elapsed_hours / 48) * 100).toFixed(1)}%`)}
-                           </span>
-                        </div>
-                        <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5 p-1">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-1000 ${
-                              board.temp_warning ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
-                            }`}
-                            style={{ width: `${board.task_type === "循环启动任务" ? 100 : Math.min(100, (board.elapsed_hours / 48) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* --- MAIN FLUID PANEL --- */}
-            <div className="flex-1 flex flex-col min-h-0 bg-[#080809] overflow-hidden">
+                          <div className="flex-1 flex flex-col min-h-0 bg-[#080809] overflow-hidden">
                
                {/* Header Info Banner */}
                <div className="px-6 py-5 md:px-10 md:py-8 bg-[#0c0c0d] border-b border-zinc-800/60 shadow-xl z-20 flex flex-wrap items-center gap-8 md:gap-12">
@@ -542,7 +436,7 @@ export default function BoardDetailPage() {
                             name: 'DDR Temperature',
                             val: point.ddr_temperature
                           }))
-                        ]} sidebarCollapsed={sidebarCollapsed} />
+                        ]} />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <span className="text-zinc-700 italic text-[10px] uppercase font-black tracking-[0.3em]">
