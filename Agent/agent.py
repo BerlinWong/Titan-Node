@@ -7,6 +7,12 @@ import urllib.parse
 from datetime import datetime
 from typing import Dict, List, Optional
 
+# --- 版本信息 ---
+AGENT_VERSION = "2.1.0"
+print(f"🚀 Titan Node Agent v{AGENT_VERSION} - 启动中...")
+print(f"📅 启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print("=" * 60)
+
 # --- 配置管理 ---
 def load_config():
     config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -633,5 +639,9 @@ class Agent:
             time.sleep(SCAN_INTERVAL)
 
 if __name__ == "__main__":
+    print(f"🎯 Titan Node Agent v{AGENT_VERSION} - 开始运行")
+    print(f"🔧 硬件传感器过滤: 已启用 (排除ADC、PMIC等硬件监控)")
+    print(f"📊 温度数据采样: 5分钟时间窗口分组")
+    print("=" * 60)
     agent = Agent()
     agent.run()
