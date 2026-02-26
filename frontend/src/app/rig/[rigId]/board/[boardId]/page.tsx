@@ -53,7 +53,7 @@ const TemperatureChart = ({ dataPoints, sidebarCollapsed }: { dataPoints: Array<
     sensorNames.forEach((name) => {
       const data = sensorDataMap.get(name);
       data.sort((a: any, b: any) => a[0] - b[0]);
-      const isDefaultVisible = name.toUpperCase().includes("CPU") || name.toUpperCase().includes("DDR") || name.toUpperCase().includes("MIN");
+      const isDefaultVisible = name.toUpperCase().includes("MAX") || name.toUpperCase().includes("MIN") || name.toUpperCase().includes("DDR");
       
       series.push({
         name: name,
@@ -521,11 +521,26 @@ export default function BoardDetailPage() {
                           <span className="text-emerald-500 italic text-[10px] uppercase font-black tracking-[0.3em] animate-pulse">Loading Temperature Data...</span>
                         </div>
                       ) : temperatureData && temperatureData.temp_points && temperatureData.temp_points.length > 0 ? (
-                        <TemperatureChart dataPoints={temperatureData.temp_points.map((point: any) => ({
-                          ts: new Date(point.timestamp).getTime(),
-                          name: point.sensor || 'Temperature',
-                          val: point.temperature
-                        }))} sidebarCollapsed={sidebarCollapsed} />
+                        <TemperatureChart dataPoints={[
+                          // 最高温度线
+                          ...temperatureData.temp_points.map((point: any) => ({
+                            ts: new Date(point.timestamp).getTime(),
+                            name: 'Max Temperature',
+                            val: point.max_temperature
+                          })),
+                          // 最低温度线
+                          ...temperatureData.temp_points.map((point: any) => ({
+                            ts: new Date(point.timestamp).getTime(),
+                            name: 'Min Temperature', 
+                            val: point.min_temperature
+                          })),
+                          // DDR温度线
+                          ...temperatureData.temp_points.map((point: any) => ({
+                            ts: new Date(point.timestamp).getTime(),
+                            name: 'DDR Temperature',
+                            val: point.ddr_temperature
+                          }))
+                        ]} sidebarCollapsed={sidebarCollapsed} />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <span className="text-zinc-700 italic text-[10px] uppercase font-black tracking-[0.3em]">
