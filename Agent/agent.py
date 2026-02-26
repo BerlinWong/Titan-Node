@@ -329,44 +329,32 @@ class Agent:
                                   next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), 0.0))
                         status_data["temp_ddr"] = ddr_val
 
-                    # 收集温度曲线数据用于独立API - 简化版本
+                    # 收集温度曲线数据用于独立API - 按时间窗口计算
                     temp_points = []
                     if raw_points:
-                        # 按5分钟采样（300秒），保留完整48小时数据
-                        sampled_points = []
-                        last_timestamp = 0
+                        # 按5分钟时间窗口分组计算温度统计
+                        time_windows = {}
                         
                         for point in raw_points:
-                            if point["ts"] - last_timestamp >= 300000:  # 5分钟 = 300秒 = 300000毫秒
-                                sampled_points.append(point)
-                                last_timestamp = point["ts"]
+                            # 将时间戳向下取整到5分钟边界
+                            window_time = (point["ts"] // 300000) * 300000  # 5分钟 = 300000毫秒
+                            if window_time not in time_windows:
+                                time_windows[window_time] = []
+                            time_windows[window_time].append(point["val"])
                         
-                        # 如果采样点太少，使用均匀采样
-                        if len(sampled_points) < 100:
-                            step = max(1, len(raw_points) // 576)  # 48小时 × 12点/小时 = 576点
-                            sampled_points = raw_points[::step]
-                        
-                        # 按时间分组计算每个时间点的温度统计
-                        time_groups = {}
-                        for point in sampled_points:
-                            time_key = point["ts"]
-                            if time_key not in time_groups:
-                                time_groups[time_key] = []
-                            time_groups[time_key].append(point["val"])
-                        
-                        # 为每个时间点计算最高温、最低温，并获取DDR温度
-                        for timestamp, temps in time_groups.items():
+                        # 为每个时间窗口计算最高温、最低温和DDR温度
+                        for window_timestamp, temps in time_windows.items():
                             max_temp = max(temps)
                             min_temp = min(temps)
                             
-                            # 查找对应时间的DDR温度
+                            # 查找该时间窗口的DDR温度
                             ddr_temp = 0.0
-                            for point in sampled_points:
-                                if point["ts"] == timestamp and "DDR" in point["name"].upper():
+                            for point in raw_points:
+                                if abs(point["ts"] - window_timestamp) < 300000 and "DDR" in point["name"].upper():
                                     ddr_temp = point["val"]
                                     break
                             
-                            temp_time = datetime.fromtimestamp(timestamp / 1000).isoformat()
+                            temp_time = datetime.fromtimestamp(window_timestamp / 1000).isoformat()
                             temp_points.append({
                                 "timestamp": temp_time,
                                 "max_temperature": max_temp,
