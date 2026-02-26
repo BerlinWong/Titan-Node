@@ -523,7 +523,7 @@ export default function BoardDetailPage() {
                       ) : temperatureData && temperatureData.temp_points && temperatureData.temp_points.length > 0 ? (
                         <TemperatureChart dataPoints={temperatureData.temp_points.map((point: any) => ({
                           ts: new Date(point.timestamp).getTime(),
-                          name: 'Temperature',
+                          name: point.sensor || 'Temperature',
                           val: point.temperature
                         }))} sidebarCollapsed={sidebarCollapsed} />
                       ) : (

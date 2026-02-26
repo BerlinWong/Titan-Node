@@ -330,22 +330,23 @@ class Agent:
                         status_data["temp_ddr"] = ddr_val
 
                     # 收集温度曲线数据用于独立API
-                        temp_points = []
-                        if all_temps:
-                            # 智能采样：每分钟一个点，最多1000个点
-                            step = max(1, len(all_temps) // 1000)
-                            sampled_temps = all_temps[::step]
-                            
-                            for i, temp in enumerate(sampled_temps):
-                                timestamp = datetime.now().isoformat()
-                                temp_points.append({
-                                    "timestamp": timestamp,
-                                    "temperature": temp
-                                })
-                            
-                            status_data["temp_points"] = temp_points[-1000:]  # 限制最多1000个点
-                        else:
-                            status_data["temp_points"] = []
+                    temp_points = []
+                    if raw_points:  # 使用raw_points包含所有传感器数据
+                        # 智能采样：每分钟一个点，最多1000个点
+                        step = max(1, len(raw_points) // 1000)
+                        sampled_points = raw_points[::step]
+                        
+                        for point in sampled_points:
+                            timestamp = datetime.fromtimestamp(point["ts"] / 1000).isoformat()
+                            temp_points.append({
+                                "timestamp": timestamp,
+                                "temperature": point["val"],
+                                "sensor": point["name"]  # 保留传感器名称
+                            })
+                        
+                        status_data["temp_points"] = temp_points[-1000:]  # 限制最多1000个点
+                    else:
+                        status_data["temp_points"] = []
 
             except Exception as e:
                 print(f"[❌ {board_id}] CM55 全量解析失败: {e}")
