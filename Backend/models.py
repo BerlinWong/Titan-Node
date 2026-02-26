@@ -41,3 +41,13 @@ class RigReport(BaseModel):
     boards: List[BoardStatus]
     last_report_at: Optional[datetime] = Field(default_factory=datetime.now)
     seconds_since_report: float = 0.0
+
+class TemperatureData(BaseModel):
+    """温度曲线数据模型"""
+    rig_id: str
+    board_id: str
+    temp_points: List[dict] = []  # [{"timestamp": "2026-02-26T12:00:00", "temperature": 45.2}, ...]
+    temp_min: float = 0.0
+    temp_max: float = 0.0
+    current_temp: float = 0.0
+    last_updated: datetime = Field(default_factory=datetime.now)

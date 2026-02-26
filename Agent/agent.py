@@ -329,8 +329,23 @@ class Agent:
                                   next((v for k, v in sensor_latest.items() if "DDR" in k.upper()), 0.0))
                         status_data["temp_ddr"] = ddr_val
 
-                    # 移除温度历史数据，大幅减少上传量
-                    # status_data["temp_points"] = []
+                    # 收集温度曲线数据用于独立API
+                        temp_points = []
+                        if all_temps:
+                            # 智能采样：每分钟一个点，最多1000个点
+                            step = max(1, len(all_temps) // 1000)
+                            sampled_temps = all_temps[::step]
+                            
+                            for i, temp in enumerate(sampled_temps):
+                                timestamp = datetime.now().isoformat()
+                                temp_points.append({
+                                    "timestamp": timestamp,
+                                    "temperature": temp
+                                })
+                            
+                            status_data["temp_points"] = temp_points[-1000:]  # 限制最多1000个点
+                        else:
+                            status_data["temp_points"] = []
 
             except Exception as e:
                 print(f"[❌ {board_id}] CM55 全量解析失败: {e}")
@@ -550,21 +565,43 @@ class Agent:
             for bid, p in pairs.items():
                 print(f"[{bid}] kernel={p.kernel_file is not None} cm55={p.cm55_file is not None} | cm55_file={p.cm55_file}")
             board_statuses = []
+            temperature_reports = []  # 温度数据单独上报
             for key, pair in pairs.items():
                 if pair.kernel_file or pair.cm55_file:
                     status = self.parse_logs(pair)
+                    
+                    # 分离温度数据
+                    temp_data = {
+                        "rig_id": self.rig_id,
+                        "board_id": status["board_id"],
+                        "temp_points": status.pop("temp_points", []),  # 从主要状态中移除
+                        "temp_min": status["temp_min"],
+                        "temp_max": status["temp_max"],
+                        "current_temp": status["temperature"]
+                    }
+                    temperature_reports.append(temp_data)
                     board_statuses.append(status)
             
+            # 上报主要状态数据（不包含温度曲线）
             report = {
                 "rig_id": self.rig_id,
                 "boards": board_statuses
             }
             
+            # 上报温度数据到独立API
+            if temperature_reports:
+                try:
+                    temp_url = BACKEND_URL.replace("/api/report", "/api/temperature")
+                    requests.post(temp_url, json={"temperature_data": temperature_reports})
+                    print(f"[{datetime.now()}] 上报温度数据: {len(temperature_reports)} 个板子")
+                except Exception as e:
+                    print(f"温度数据上报失败: {e}")
+            
             try:
                 requests.post(BACKEND_URL, json=report)
-                print(f"[{datetime.now()}] 上报数据: {len(board_statuses)} 个板子已在线 (任务: {self.selected_task_type})。")
+                print(f"[{datetime.now()}] 上报状态数据: {len(board_statuses)} 个板子已在线 (任务: {self.selected_task_type})。")
             except Exception as e:
-                print(f"上报失败: {e}")
+                print(f"状态数据上报失败: {e}")
             
             time.sleep(SCAN_INTERVAL)
 

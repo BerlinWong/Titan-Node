@@ -91,6 +91,31 @@ async def get_all_rules():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get rules: {str(e)}")
 
+@app.post("/api/temperature")
+async def report_temperature_data(data: Dict[str, Any]):
+    """接收来自 Agent 的温度数据上报"""
+    try:
+        temp_reports = []
+        for temp_data in data.get("temperature_data", []):
+            temp_reports.append(models.TemperatureData(**temp_data))
+        store.update_temperature_data(temp_reports)
+        return {"status": "success", "count": len(temp_reports)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update temperature data: {str(e)}")
+
+@app.get("/api/temperature/{rig_id}/{board_id}")
+async def get_temperature_curve(rig_id: str, board_id: str):
+    """获取指定板子的温度曲线数据"""
+    try:
+        temp_data = store.get_temperature_data(rig_id, board_id)
+        if not temp_data:
+            raise HTTPException(status_code=404, detail="Temperature data not found")
+        return temp_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get temperature data: {str(e)}")
+
 @app.post("/api/rules/{task_type}")
 async def update_rules(task_type: str, rules: RuleConfig):
     """更新特定任务类型的规则配置"""

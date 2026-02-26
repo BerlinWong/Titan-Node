@@ -231,6 +231,8 @@ export default function BoardDetailPage() {
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [temperatureData, setTemperatureData] = useState<any>(null);
+  const [loadingTemperature, setLoadingTemperature] = useState(false);
 
   useEffect(() => {
     const formatter = new Intl.DateTimeFormat('zh-CN', { 
@@ -256,6 +258,24 @@ export default function BoardDetailPage() {
       console.error('Failed to fetch detail:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTemperatureData = async () => {
+    setLoadingTemperature(true);
+    try {
+      const res = await fetch(`${CONFIG.API_BASE_URL}/api/temperature/${rigId}/${boardId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTemperatureData(data);
+      } else {
+        setTemperatureData(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch temperature data:', error);
+      setTemperatureData(null);
+    } finally {
+      setLoadingTemperature(false);
     }
   };
 
@@ -479,14 +499,40 @@ export default function BoardDetailPage() {
                  )}
 
                   <div className="flex-1 bg-black/60 border border-zinc-800/80 rounded-[2.5rem] p-6 md:p-10 shadow-2xl flex flex-col min-h-[400px]">
+                    <div className="flex justify-between items-center mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-emerald-500 rotate-45" />
+                        <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.4em]">Thermal Analytics</h3>
+                      </div>
+                      {!temperatureData && (
+                        <button
+                          onClick={fetchTemperatureData}
+                          disabled={loadingTemperature}
+                          className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-xs font-black uppercase tracking-[0.2em] hover:bg-emerald-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loadingTemperature ? 'Loading...' : 'View Temperature Curve'}
+                        </button>
+                      )}
+                    </div>
+                    
                     <div className="flex-1 min-h-0 relative">
-                       {board.temp_points && board.temp_points.length > 0 ? (
-                         <TemperatureChart dataPoints={board.temp_points} sidebarCollapsed={sidebarCollapsed} />
-                       ) : (
-                         <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-zinc-700 italic text-[10px] uppercase font-black tracking-[0.3em]">Synchronizing Telemetry...</span>
-                         </div>
-                       )}
+                      {loadingTemperature ? (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-emerald-500 italic text-[10px] uppercase font-black tracking-[0.3em] animate-pulse">Loading Temperature Data...</span>
+                        </div>
+                      ) : temperatureData && temperatureData.temp_points && temperatureData.temp_points.length > 0 ? (
+                        <TemperatureChart dataPoints={temperatureData.temp_points.map((point: any) => ({
+                          ts: new Date(point.timestamp).getTime(),
+                          name: 'Temperature',
+                          val: point.temperature
+                        }))} sidebarCollapsed={sidebarCollapsed} />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-zinc-700 italic text-[10px] uppercase font-black tracking-[0.3em]">
+                            {temperatureData ? 'No Temperature Data Available' : 'Click Button to Load Temperature Curve'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                  </div>
                </div>

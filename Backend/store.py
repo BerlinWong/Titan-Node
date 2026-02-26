@@ -98,7 +98,53 @@ def delete_rig(rig_id: str) -> bool:
         return True
     return False
 
-# ===== 规则管理功能 =====
+# ===== 温度数据管理 =====
+TEMPERATURE_FILE = "temperature_data.json"
+temperature_store: Dict[str, models.TemperatureData] = {}  # key: f"{rig_id}_{board_id}"
+
+def save_temperature_to_disk():
+    """保存温度数据到磁盘"""
+    try:
+        serializable_data = {}
+        for key, temp_data in temperature_store.items():
+            serializable_data[key] = temp_data.dict()
+        with open(TEMPERATURE_FILE, "w", encoding="utf-8") as f:
+            json.dump(serializable_data, f, indent=2, default=str)
+    except Exception as e:
+        print(f"Failed to save temperature data: {e}")
+
+def load_temperature_from_disk():
+    """从磁盘加载温度数据"""
+    global temperature_store
+    try:
+        with open(TEMPERATURE_FILE, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+            new_store = {}
+            for key, item in raw_data.items():
+                new_store[key] = models.TemperatureData(**item)
+            temperature_store = new_store
+    except FileNotFoundError:
+        temperature_store = {}
+    except Exception as e:
+        print(f"Failed to load temperature data: {e}")
+        temperature_store = {}
+
+def update_temperature_data(temp_reports: List[models.TemperatureData]):
+    """更新温度数据"""
+    from datetime import datetime
+    for temp_data in temp_reports:
+        key = f"{temp_data.rig_id}_{temp_data.board_id}"
+        temp_data.last_updated = datetime.now()
+        temperature_store[key] = temp_data
+    save_temperature_to_disk()
+
+def get_temperature_data(rig_id: str, board_id: str) -> models.TemperatureData:
+    """获取指定板子的温度数据"""
+    key = f"{rig_id}_{board_id}"
+    return temperature_store.get(key)
+
+# 初始化温度数据
+load_temperature_from_disk()
 
 def save_rules_to_disk():
     """将规则配置序列化到磁盘（Vercel环境跳过）"""
